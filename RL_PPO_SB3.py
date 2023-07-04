@@ -148,7 +148,7 @@ class RL_Environment(gym.Env):
         # # For conversion from discrete action to continuous value
         # self.action_values = np.linspace(self.initial_range[0], self.initial_range[1], self.num_actions)
 
-    def reset(self, seed=None):
+    def reset(self, seed=None, **kwargs):
         self.range = self.initial_range
         self.points_left = self.total_points
         self.chosen_points = []
@@ -191,72 +191,63 @@ class RL_Environment(gym.Env):
 
 
 # Training function
-def train_dqn(test_enabled=True):
+def train_ppo(test_enabled=True, initial_range=(-8, 8), num_points=10, learning_rate=0.001, train_timesteps= 10_000, save_model=True, verbose=True):
     # Create a vectorized environment with custom range and number of points
-    num_points = 10
-    env = DummyVecEnv([lambda: RL_Environment(initial_range=(-8, 8), num_points=num_points)])
+
+    env = DummyVecEnv([lambda: RL_Environment(initial_range=initial_range, num_points=num_points)])
     env = VecNormalize(env, norm_obs=True, norm_reward=True)
     # Initialize the PPO model
-    model = PPO("MlpPolicy", env, learning_rate=0.001 * 0.2, verbose=1, tensorboard_log= './SiLU_approx_tensorboard_logs/')
+    model = PPO("MlpPolicy", env, learning_rate=learning_rate * 0.2, verbose=int(verbose), tensorboard_log= './SiLU_approx_tensorboard_logs/')
 
     # Train the model
-    model.learn(total_timesteps=10000 * 1)
+    model.learn(total_timesteps=train_timesteps)
+
 
     # Save the trained model
-    model.save("ppo_model")
+    if save_model:
+        model.save("ppo_model")
+
+    reward = None
+    mean_error = None
+    max_error = None
+    final_chosen_points = None
 
     # Test the model
     if test_enabled:
         # repeat the process for iter_num and then pick best one
-        iter_num = 5
+
         n_steps = num_points
-        list_of_rewards = []
-        # set initial best_reward as minimum float value
-        best_reward = -float('inf')
-        best_mean_error = float('inf')
-        best_max_error = float('inf')
-        best_model = None
-        best_l = None
-        for iter in range(iter_num):
 
-            env = DummyVecEnv([lambda: RL_Environment(initial_range=(-8, 8), num_points=10)])
-            obs = env.reset()
+        # Create a vectorized environment with custom range and number of points
+        env = DummyVecEnv([lambda: RL_Environment(initial_range=initial_range, num_points=num_points)])
+        obs = env.reset()
 
 
-            for step in range(n_steps):
-                action, _ = model.predict(obs, deterministic=True)
+        for step in range(n_steps):
+            action, _ = model.predict(obs, deterministic=True)
+            if verbose:
                 print("Step {}".format(step + 1))
                 print("Action: ", action)
-                l = env.envs[0].chosen_points
-                obs, reward, done, info = env.step(action)
+            l = env.envs[0].chosen_points
+            obs, reward, done, info = env.step(action)
+            if verbose:
                 print('Observation: ', obs)
                 print('Reward: ', reward)
                 print('Done: ', done)
                 print('Chosen Points: ', env.envs[0].chosen_points)
                 print('Remaining Points', env.envs[0].points_left)
-                if done:
-                    print("Goal reached!", "reward=", reward)
-                    # new_l = np.append(l, action * (env.envs[0].initial_range[1] - env.envs[0].initial_range[0]) / (env.envs[0].num_actions - 1) + max(env.envs[0].initial_range[0], l[-1]))
-                    # l.append(action * (env.envs[0].initial_range[1] - env.envs[0].initial_range[0]) / (env.envs[0].num_actions - 1) + env.envs[0].range[0])
-                    reward, mean_error, max_error = final_reward_function_silu_print(l, env.envs[0].initial_range, verbose=False)
-                    list_of_rewards.append(reward)
-                    if reward > best_reward:
-                        best_reward = reward
-                        best_mean_error = mean_error
-                        best_max_error = max_error
-                        best_model = model
-                        best_l = l
-                    # print('Final Chosen Points: ', l)
-                    # Final Chosen Points:  [-3.59, -2.5999999999999996, -1.6099999999999997, -1.4699999999999998, -0.47999999999999976, -0.15999999999999975, -0.009999999999999759, 0.3100000000000003, 0.4600000000000003, 0.7800000000000002]
-                    break
-        print('Best Reward: ', best_reward)
-        print('Best Mean Error: ', best_mean_error)
-        print('Best Max Error: ', best_max_error)
-        print('Best Chosen Points: ', best_l)
-        final_reward_function_silu_print(best_l, env.envs[0].initial_range, verbose=True)
+            if done:
+                print("Goal reached!", "reward=", reward)
+                # new_l = np.append(l, action * (env.envs[0].initial_range[1] - env.envs[0].initial_range[0]) / (env.envs[0].num_actions - 1) + max(env.envs[0].initial_range[0], l[-1]))
+                # l.append(action * (env.envs[0].initial_range[1] - env.envs[0].initial_range[0]) / (env.envs[0].num_actions - 1) + env.envs[0].range[0])
+                reward, mean_error, max_error = final_reward_function_silu_print(l, env.envs[0].initial_range, verbose=verbose)
+                final_chosen_points = l
+                print('Final Chosen Points: ', final_chosen_points)
+                # Final Chosen Points:  [-3.59, -2.5999999999999996, -1.6099999999999997, -1.4699999999999998, -0.47999999999999976, -0.15999999999999975, -0.009999999999999759, 0.3100000000000003, 0.4600000000000003, 0.7800000000000002]
+                break
 
-        # Show the rewards
-        print('list_of_rewards:', list_of_rewards)
+    return model, final_chosen_points, reward, mean_error, max_error
+
 if __name__ == '__main__':
     # Start the training
-    train_dqn()
+    model, final_chosen_points, reward, mean_error, max_error = train_ppo()

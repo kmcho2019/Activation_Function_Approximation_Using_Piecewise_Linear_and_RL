@@ -7,6 +7,7 @@ from stable_baselines3.common.vec_env import VecNormalize
 import datetime
 import os
 import tqdm
+import time
 
 
 from least_sq_approximation import matrix_row_generator
@@ -121,6 +122,33 @@ def final_reward_function_silu_print(chosen_points, initial_range, verbose = Tru
 
     return reward, mean_error, max_error
 
+# Given a function and a list of points, this function will plot the function and the piecewise linear approximation based on the points
+# And also mark the points on the plot
+def plot_chosen_points(original_function, chosen_points, initial_range, show_plot = False, save_fig_name = None):
+    piecewise_function_segments = []
+    piecewise_function_segments.append(initial_range[0])
+    piecewise_function_segments.extend(chosen_points)
+    if chosen_points[-1] != initial_range[1]:
+        piecewise_function_segments.append(initial_range[1])
+    step_size = 0.001 # determines the accuracy of the least square fit that generates the approximation of the silu function
+    total_number_of_steps = int((initial_range[1] - initial_range[0]) / step_size) + 1
+    # construct the piecewise linear approximation of the silu function
+    piecewise_function = combined_function_generator(original_function, piecewise_function_segments, total_number_of_steps, False)
+    # compute the mean and max error of the approximation compared to the silu function
+    x = np.linspace(initial_range[0], initial_range[1], total_number_of_steps)
+    silu_reference_val = original_function(x)
+    silu_approximation_val = piecewise_function(x)
+    # visualize the function in matplotlib
+    # visualize the function in matplotlib
+    plt.plot(x, silu_reference_val, label="silu")
+    plt.plot(x, silu_approximation_val, label="approximation")
+    plt.scatter(np.array(chosen_points), piecewise_function(np.array(chosen_points)), color='red',
+                label=f"chosen points: {len(chosen_points)}")
+    plt.legend()
+    if show_plot:
+        plt.show()
+    if save_fig_name is not None:
+        plt.savefig(save_fig_name)
 # Define the RL environment using gym
 # function with range (-8, 8) and 10 points, which can be changed during initialization
 # Each round an agent will choose a number inside the initial range.
@@ -264,19 +292,28 @@ if __name__ == '__main__':
     # Start the training
     model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range=initial_range)
 
-
+    # short delay to prevent the tqdm progress bar from being printed before the earlier process outputs
+    time.sleep(0.1)
     # after iter_num of training runs, pick the best one and save it
-    iter_num = 100
+    iter_num = 10
     best_reward = float('-inf')
     best_model = None
     best_chosen_points = None
     best_mean_error = None
     best_max_error = None
+    list_of_rewards = []
+    list_of_mean_errors = []
+    list_of_max_errors = []
+    list_of_chosen_points = []
 
     # add tqdm tracking over iterations
 
     for i in tqdm.tqdm(range(iter_num)):
         model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range=initial_range, test_enabled=True, verbose=False)
+        list_of_rewards.append(reward)
+        list_of_mean_errors.append(mean_error)
+        list_of_max_errors.append(max_error)
+        list_of_chosen_points.append(final_chosen_points)
         if reward > best_reward:
             best_reward = reward
             best_model = model
@@ -296,3 +333,39 @@ if __name__ == '__main__':
     final_reward_function_silu_print(best_chosen_points, initial_range, verbose=True)
 
     best_model.save(os.path.join('model_archive', f"ppo_silu_approx_best_model_in_run_{len(best_chosen_points)}_points_{best_model_timestamp}.zip"))
+
+    # Generate plot of best model
+    plot_chosen_points(silu, best_chosen_points, initial_range, show_plot=False, save_fig_name=f"ppo_silu_approx_best_model_in_run_{len(best_chosen_points)}_points_{best_model_timestamp}.png")
+
+    histogram_bins = iter_num // 5
+    # Generate histogram of rewards
+    plt.hist(list_of_rewards, bins=histogram_bins)
+    plt.title('Histogram of Rewards')
+    plt.xlabel('Reward')
+    plt.ylabel('Frequency')
+    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_histogram_of_rewards_{best_model_timestamp}.png"))
+    plt.show()
+    # Generate histogram of mean errors
+    plt.hist(list_of_mean_errors, bins=histogram_bins)
+    plt.title('Histogram of Mean Errors')
+    plt.xlabel('Mean Error')
+    plt.ylabel('Frequency')
+    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_histogram_of_mean_errors_{best_model_timestamp}.png"))
+    plt.show()
+    # Generate histogram of max errors
+    plt.hist(list_of_max_errors, bins=histogram_bins)
+    plt.title('Histogram of Max Errors')
+    plt.xlabel('Max Error')
+    plt.ylabel('Frequency')
+    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_histogram_of_max_errors_{best_model_timestamp}.png"))
+    plt.show()
+    # Generate histogram of number of points
+    plt.hist([len(x) for x in list_of_chosen_points], bins=histogram_bins)
+    plt.title('Histogram of Number of Points')
+    plt.xlabel('Number of Points')
+    plt.ylabel('Frequency')
+    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_histogram_of_number_of_points_{best_model_timestamp}.png"))
+    plt.show()
+
+    # Histograms overlaid with graph being lines instead of bar graphs
+    # Generate histogram of rewards

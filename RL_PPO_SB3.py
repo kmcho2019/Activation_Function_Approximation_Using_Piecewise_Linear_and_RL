@@ -112,7 +112,7 @@ def final_reward_function_silu_print(chosen_points, initial_range, verbose = Tru
         # visualize the function in matplotlib
         plt.plot(x, silu_reference_val, label="silu")
         plt.plot(x, silu_approximation_val, label="approximation")
-        plt.scatter(np.array(chosen_points), piecewise_function(np.array(chosen_points)), color='red', label="chosen points")
+        plt.scatter(np.array(chosen_points), piecewise_function(np.array(chosen_points)), color='red', label=f"chosen points: {len(chosen_points)}")
         plt.legend()
         plt.show()
 
@@ -167,7 +167,7 @@ class RL_Environment(gym.Env):
             self.points_left -= 1
         else:
             # If not, return a reward of -10 and reset, heavily penalize early truncation
-            reward = -10
+            reward = -100
 
             # when agent goes out of bounds
             chosen_point = self.initial_range[1]
@@ -194,13 +194,13 @@ class RL_Environment(gym.Env):
 
 
 # Training function
-def train_ppo(test_enabled=True, initial_range=(-8, 8), num_points=10, learning_rate=0.001, train_timesteps= 10_000, save_model=True, verbose=True):
+def train_ppo(test_enabled=True, initial_range=(-8, 8), num_points=10, learning_rate=0.0002, train_timesteps= 10_000, save_model=False, verbose=True):
     # Create a vectorized environment with custom range and number of points
 
     env = DummyVecEnv([lambda: RL_Environment(initial_range=initial_range, num_points=num_points)])
     env = VecNormalize(env, norm_obs=True, norm_reward=True)
     # Initialize the PPO model
-    model = PPO("MlpPolicy", env, learning_rate=learning_rate * 0.2, verbose=int(verbose), tensorboard_log= './SiLU_approx_tensorboard_logs/')
+    model = PPO("MlpPolicy", env, learning_rate=learning_rate, verbose=int(verbose), tensorboard_log= './SiLU_approx_tensorboard_logs/')
 
     # Train the model
     model.learn(total_timesteps=train_timesteps)
@@ -243,17 +243,52 @@ def train_ppo(test_enabled=True, initial_range=(-8, 8), num_points=10, learning_
                 print('Chosen Points: ', env.envs[0].chosen_points)
                 print('Remaining Points', env.envs[0].points_left)
             if done:
-                print("Goal reached!", "reward=", reward)
+                if verbose:
+                    print("Goal reached!", "reward=", reward)
                 # new_l = np.append(l, action * (env.envs[0].initial_range[1] - env.envs[0].initial_range[0]) / (env.envs[0].num_actions - 1) + max(env.envs[0].initial_range[0], l[-1]))
                 # l.append(action * (env.envs[0].initial_range[1] - env.envs[0].initial_range[0]) / (env.envs[0].num_actions - 1) + env.envs[0].range[0])
                 reward, mean_error, max_error = final_reward_function_silu_print(l, env.envs[0].initial_range, verbose=verbose)
                 final_chosen_points = l
-                print('Final Chosen Points: ', final_chosen_points)
+                if verbose:
+                    print('Final Chosen Points: ', final_chosen_points)
                 # Final Chosen Points:  [-3.59, -2.5999999999999996, -1.6099999999999997, -1.4699999999999998, -0.47999999999999976, -0.15999999999999975, -0.009999999999999759, 0.3100000000000003, 0.4600000000000003, 0.7800000000000002]
                 break
 
     return model, final_chosen_points, reward, mean_error, max_error
 
 if __name__ == '__main__':
+    initial_range = (-8, 8)
+
     # Start the training
-    model, final_chosen_points, reward, mean_error, max_error = train_ppo()
+    model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range = (-8, 8))
+
+
+    # after iter_num of training runs, pick the best one and save it
+    iter_num = 100
+    best_reward = float('-inf')
+    best_model = None
+    best_chosen_points = None
+    best_mean_error = None
+    best_max_error = None
+
+    for i in range(iter_num):
+        model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range = (-8, 8), test_enabled=True, verbose=False)
+        if reward > best_reward:
+            best_reward = reward
+            best_model = model
+            best_chosen_points = final_chosen_points
+            best_mean_error = mean_error
+            best_max_error = max_error
+    # If final point equals end of range eliminate it
+    if best_chosen_points is not None and best_chosen_points[-1] == initial_range[1]:
+         best_chosen_points = best_chosen_points[:-1]
+
+    # Output best results and save the model
+    best_model_timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    print('Best Reward: ', best_reward)
+    print('Best Chosen Points: ', best_chosen_points)
+    print('Best Mean Error: ', best_mean_error)
+    print('Best Max Error: ', best_max_error)
+    final_reward_function_silu_print(best_chosen_points, initial_range, verbose=True)
+
+    best_model.save(os.path.join('model_archive', f"ppo_silu_approx_{len(best_chosen_points)}_points_{best_model_timestamp}.zip"))

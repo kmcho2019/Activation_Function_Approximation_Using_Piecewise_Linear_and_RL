@@ -118,6 +118,7 @@ def final_reward_function_silu_print(chosen_points, initial_range, verbose = Tru
         plt.scatter(np.array(chosen_points), piecewise_function(np.array(chosen_points)), color='red', label=f"chosen points: {len(chosen_points)}")
         plt.legend()
         plt.show()
+        plt.close()
 
 
     return reward, mean_error, max_error
@@ -149,6 +150,7 @@ def plot_chosen_points(original_function, chosen_points, initial_range, show_plo
         plt.show()
     if save_fig_name is not None:
         plt.savefig(save_fig_name)
+    plt.close()
 # Define the RL environment using gym
 # function with range (-8, 8) and 10 points, which can be changed during initialization
 # Each round an agent will choose a number inside the initial range.
@@ -286,6 +288,43 @@ def train_ppo(test_enabled=True, initial_range=(-8, 8), num_points=10, learning_
 
     return model, final_chosen_points, reward, mean_error, max_error
 
+# function for giving overlapping histogram
+import matplotlib.pyplot as plt
+import numpy as np
+
+def plot_overlapping_histogram(A, B, C, figure_legend=None, figure_name=None):
+    # Set figure size and margins
+    plt.figure(figsize=(10, 6))
+    plt.margins(0.02)
+
+    # Set histogram parameters
+    bins = 20
+    alpha = 0.5
+
+    # Plot histograms for each dataset
+    plt.hist(A, bins=bins, density=True, alpha=alpha, color='blue', label=figure_legend[0] if figure_legend else None)
+    plt.hist(B, bins=bins, density=True, alpha=alpha, color='orange', label=figure_legend[1] if figure_legend else None)
+    plt.hist(C, bins=bins, density=True, alpha=alpha, color='green', label=figure_legend[2] if figure_legend else None)
+
+    # Add labels and a legend
+    plt.xlabel('X-axis')
+    plt.ylabel('Density')
+    plt.legend()
+
+    # Plot dots for each dataset
+    plt.scatter(A, np.zeros_like(A), color='blue', label=figure_legend[0] if figure_legend else None)
+    plt.scatter(B, np.zeros_like(B), color='orange', label=figure_legend[1] if figure_legend else None)
+    plt.scatter(C, np.zeros_like(C), color='green', label=figure_legend[2] if figure_legend else None)
+
+    if figure_name is not None:
+        # Save the figure
+        plt.savefig(figure_name)
+
+    # Display the plot
+    plt.show()
+    plt.close()
+
+
 if __name__ == '__main__':
     initial_range = (-8, 8)
 
@@ -343,29 +382,34 @@ if __name__ == '__main__':
     plt.title('Histogram of Rewards')
     plt.xlabel('Reward')
     plt.ylabel('Frequency')
-    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_histogram_of_rewards_{best_model_timestamp}.png"))
+    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_best_model_in_run_histogram_of_rewards_{best_model_timestamp}.png"))
     plt.show()
+    plt.close()
     # Generate histogram of mean errors
     plt.hist(list_of_mean_errors, bins=histogram_bins)
     plt.title('Histogram of Mean Errors')
     plt.xlabel('Mean Error')
     plt.ylabel('Frequency')
-    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_histogram_of_mean_errors_{best_model_timestamp}.png"))
+    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_best_model_in_run_histogram_of_mean_errors_{best_model_timestamp}.png"))
     plt.show()
+    plt.close()
     # Generate histogram of max errors
     plt.hist(list_of_max_errors, bins=histogram_bins)
     plt.title('Histogram of Max Errors')
     plt.xlabel('Max Error')
     plt.ylabel('Frequency')
-    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_histogram_of_max_errors_{best_model_timestamp}.png"))
+    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_best_model_in_run_histogram_of_max_errors_{best_model_timestamp}.png"))
     plt.show()
+    plt.close()
     # Generate histogram of number of points
     plt.hist([len(x) for x in list_of_chosen_points], bins=histogram_bins)
     plt.title('Histogram of Number of Points')
     plt.xlabel('Number of Points')
     plt.ylabel('Frequency')
-    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_histogram_of_number_of_points_{best_model_timestamp}.png"))
+    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_best_model_in_run_histogram_of_number_of_points_{best_model_timestamp}.png"))
     plt.show()
+    plt.close()
 
     # Histograms overlaid with graph being lines instead of bar graphs
-    # Generate histogram of rewards
+    figure_legend_list = ['Rewards', 'Mean Errors', 'Max Errors']
+    plot_overlapping_histogram(list_of_rewards, list_of_mean_errors, list_of_max_errors, figure_legend=figure_legend_list, figure_name=os.path.join('model_archive', f"ppo_silu_approx_best_model_in_run_histograms_overlaid_{best_model_timestamp}.png"))

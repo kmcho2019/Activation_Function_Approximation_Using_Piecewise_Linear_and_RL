@@ -167,10 +167,8 @@ class RL_Environment(gym.Env):
             self.points_left -= 1
         else:
             # If not, return a reward of -10 and reset, heavily penalize early truncation
-            penalty = -10
+            reward = -10
 
-            # penalize early truncation but also give out final reward based on error
-            reward = final_reward_function_silu(self.chosen_points, self.initial_range) + penalty
             # when agent goes out of bounds
             chosen_point = self.initial_range[1]
             self.chosen_points.append(chosen_point)

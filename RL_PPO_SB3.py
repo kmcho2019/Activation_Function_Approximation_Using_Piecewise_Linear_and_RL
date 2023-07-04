@@ -6,6 +6,8 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.vec_env import VecNormalize
 import datetime
 import os
+import tqdm
+
 
 from least_sq_approximation import matrix_row_generator
 from least_sq_approximation import piece_wise_linear_function_estimator
@@ -271,7 +273,9 @@ if __name__ == '__main__':
     best_mean_error = None
     best_max_error = None
 
-    for i in range(iter_num):
+    # add tqdm tracking over iterations
+
+    for i in tqdm.tqdm(range(iter_num)):
         model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range = (-8, 8), test_enabled=True, verbose=False)
         if reward > best_reward:
             best_reward = reward

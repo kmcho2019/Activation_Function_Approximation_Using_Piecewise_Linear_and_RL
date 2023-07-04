@@ -262,7 +262,7 @@ if __name__ == '__main__':
     initial_range = (-8, 8)
 
     # Start the training
-    model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range = (-8, 8))
+    model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range=initial_range)
 
 
     # after iter_num of training runs, pick the best one and save it
@@ -276,7 +276,7 @@ if __name__ == '__main__':
     # add tqdm tracking over iterations
 
     for i in tqdm.tqdm(range(iter_num)):
-        model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range = (-8, 8), test_enabled=True, verbose=False)
+        model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range=initial_range, test_enabled=True, verbose=False)
         if reward > best_reward:
             best_reward = reward
             best_model = model
@@ -295,4 +295,4 @@ if __name__ == '__main__':
     print('Best Max Error: ', best_max_error)
     final_reward_function_silu_print(best_chosen_points, initial_range, verbose=True)
 
-    best_model.save(os.path.join('model_archive', f"ppo_silu_approx_{len(best_chosen_points)}_points_{best_model_timestamp}.zip"))
+    best_model.save(os.path.join('model_archive', f"ppo_silu_approx_best_model_in_run_{len(best_chosen_points)}_points_{best_model_timestamp}.zip"))

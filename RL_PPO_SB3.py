@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from stable_baselines3 import DQN, PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.vec_env import VecNormalize
+import datetime
+import os
 
 from least_sq_approximation import matrix_row_generator
 from least_sq_approximation import piece_wise_linear_function_estimator
@@ -165,7 +167,10 @@ class RL_Environment(gym.Env):
             self.points_left -= 1
         else:
             # If not, return a reward of -10 and reset, heavily penalize early truncation
-            reward = -100
+            penalty = -10
+
+            # penalize early truncation but also give out final reward based on error
+            reward = final_reward_function_silu(self.chosen_points, self.initial_range) + penalty
             # when agent goes out of bounds
             chosen_point = self.initial_range[1]
             self.chosen_points.append(chosen_point)
@@ -182,7 +187,7 @@ class RL_Environment(gym.Env):
             reward_for_choosing_point = silu_curvature_alt(chosen_point)
             combined_reward = final_reward + reward_for_choosing_point
             # return value from step should be: observation, reward, terminated, truncated, info
-            return np.array([self.points_left, self.range[0], self.initial_range[1] - self.range[0]]), combined_reward, False, True, {}
+            return np.array([self.points_left, self.range[0], self.initial_range[1] - self.range[0]]), combined_reward, True, False, {}
         else:
             # Calculate reward for the chosen point
             reward = silu_curvature_alt(chosen_point)
@@ -202,10 +207,13 @@ def train_ppo(test_enabled=True, initial_range=(-8, 8), num_points=10, learning_
     # Train the model
     model.learn(total_timesteps=train_timesteps)
 
+    # get timestamp to name the model with number of points and timestamp
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
 
     # Save the trained model
     if save_model:
-        model.save("ppo_model")
+        model.save(os.path.join('model_archive', f"ppo_silu_approx_{num_points}_points_{timestamp}.zip"))
 
     reward = None
     mean_error = None

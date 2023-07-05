@@ -226,13 +226,17 @@ class RL_Environment(gym.Env):
 
 
 # Training function
-def train_ppo(test_enabled=True, initial_range=(-8, 8), num_points=10, learning_rate=0.0002, train_timesteps= 10_000, save_model=False, verbose=True):
+def train_ppo(test_enabled=True, initial_range=(-8, 8), num_points=10, learning_rate=0.0002, train_timesteps= 10_000, save_model=False, save_logs=False, verbose=True):
     # Create a vectorized environment with custom range and number of points
 
     env = DummyVecEnv([lambda: RL_Environment(initial_range=initial_range, num_points=num_points)])
     env = VecNormalize(env, norm_obs=True, norm_reward=True)
     # Initialize the PPO model
-    model = PPO("MlpPolicy", env, learning_rate=learning_rate, verbose=int(verbose), tensorboard_log= './SiLU_approx_tensorboard_logs/')
+    if save_logs:
+        log_dir = "./SiLU_approx_tensorboard_logs/"
+    else:
+        log_dir = None
+    model = PPO("MlpPolicy", env, learning_rate=learning_rate, verbose=int(verbose), tensorboard_log=log_dir)
 
     # Train the model
     model.learn(total_timesteps=train_timesteps)
@@ -288,11 +292,11 @@ def train_ppo(test_enabled=True, initial_range=(-8, 8), num_points=10, learning_
 
     return model, final_chosen_points, reward, mean_error, max_error
 
-# function for giving overlapping histogram
-import matplotlib.pyplot as plt
-import numpy as np
 
 def plot_overlapping_histogram(A, B, C, figure_legend=None, figure_name=None):
+    # Close any previously open figures if it exists
+    plt.close()
+
     # Set figure size and margins
     plt.figure(figsize=(10, 6))
     plt.margins(0.02)
@@ -311,10 +315,6 @@ def plot_overlapping_histogram(A, B, C, figure_legend=None, figure_name=None):
     plt.ylabel('Density')
     plt.legend()
 
-    # Plot dots for each dataset
-    plt.scatter(A, np.zeros_like(A), color='blue', label=figure_legend[0] if figure_legend else None)
-    plt.scatter(B, np.zeros_like(B), color='orange', label=figure_legend[1] if figure_legend else None)
-    plt.scatter(C, np.zeros_like(C), color='green', label=figure_legend[2] if figure_legend else None)
 
     if figure_name is not None:
         # Save the figure
@@ -327,9 +327,9 @@ def plot_overlapping_histogram(A, B, C, figure_legend=None, figure_name=None):
 
 if __name__ == '__main__':
     initial_range = (-8, 8)
-
+    max_num_points = 10
     # Start the training
-    model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range=initial_range)
+    model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range=initial_range, num_points=max_num_points)
 
     # short delay to prevent the tqdm progress bar from being printed before the earlier process outputs
     time.sleep(0.1)
@@ -344,15 +344,17 @@ if __name__ == '__main__':
     list_of_mean_errors = []
     list_of_max_errors = []
     list_of_chosen_points = []
+    list_of_models = []
 
     # add tqdm tracking over iterations
 
     for i in tqdm.tqdm(range(iter_num)):
-        model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range=initial_range, test_enabled=True, verbose=False)
+        model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range=initial_range, num_points=max_num_points, test_enabled=True, verbose=False)
         list_of_rewards.append(reward)
         list_of_mean_errors.append(mean_error)
         list_of_max_errors.append(max_error)
         list_of_chosen_points.append(final_chosen_points)
+        list_of_models.append(model)
         if reward > best_reward:
             best_reward = reward
             best_model = model
@@ -373,16 +375,54 @@ if __name__ == '__main__':
 
     best_model.save(os.path.join('model_archive', f"ppo_silu_approx_best_model_in_run_{len(best_chosen_points)}_points_{best_model_timestamp}.zip"))
 
-    # Generate plot of best model
-    plot_chosen_points(silu, best_chosen_points, initial_range, show_plot=False, save_fig_name=f"ppo_silu_approx_best_model_in_run_{len(best_chosen_points)}_points_{best_model_timestamp}.png")
+    # Also save the top percentile % of models in terms of reward value
+    percentile = 5
+    threshold = np.percentile(list_of_rewards, 100 - percentile)
+    top_rewards = [reward for reward in list_of_rewards if reward >= threshold]
+    top_models = [model for model, reward in zip(list_of_models, list_of_rewards) if reward >= threshold]
+    top_mean_errors = [mean_error for mean_error, reward in zip(list_of_mean_errors, list_of_rewards) if reward >= threshold]
+    top_max_errors = [max_error for max_error, reward in zip(list_of_max_errors, list_of_rewards) if reward >= threshold]
+    top_chosen_points = [chosen_points for chosen_points, reward in zip(list_of_chosen_points, list_of_rewards) if reward >= threshold]
+    run_dir = os.path.join('run_archive', f'silu_{max_num_points}_points_{best_model_timestamp}_top_{percentile}_percentile')
+    os.mkdir(run_dir)
+    # Save all the top percentile models
+    for model_num in range(len(top_models)):
+        current_model = top_models[model_num]
+        model_save_path = os.path.join(run_dir, f"ppo_silu_approx_top_{percentile}_percentile_model_{model_num + 1}_in_run_{len(top_chosen_points[model_num])}_points.zip")
+        current_model.save(model_save_path)
+    # Log all the top percentile model information in a file
+    with open(os.path.join(run_dir, f"ppo_silu_approx_top_{percentile}_percentile_model_info.txt"), 'w') as f:
+        for model_num in range(len(top_models)):
+            f.write(f"Model {model_num + 1}:\n")
+            f.write(f"Reward: {top_rewards[model_num]}\n")
+            f.write(f"Mean Error: {top_mean_errors[model_num]}\n")
+            f.write(f"Max Error: {top_max_errors[model_num]}\n")
+            f.write(f"Chosen Points: {top_chosen_points[model_num]}\n")
+            f.write("\n")
+    # Generate desensitized version of chosen points as commas in lists of numbers can cause problems in csv files
+    # Convert commas to whitespace and the entire list to a string
+    chosen_points_desensitized = [str(list_of_chosen_points[model_num]).replace(',', ' ') for model_num in range(len(list_of_chosen_points))]
+    print(len(chosen_points_desensitized))
+    print(chosen_points_desensitized)
+    # Save all the reward, mean error, max error, and chosen points information in a csv file
+    with open(os.path.join(run_dir, f"ppo_silu_approx_model_info.csv"), 'w') as f:
+        f.write("Model Number,Reward,Mean Error,Max Error,Chosen Points\n")
+        for model_num in range(len(list_of_models)):
+            f.write(f"{model_num + 1},{list_of_rewards[model_num]},{list_of_mean_errors[model_num]},{list_of_max_errors[model_num]},{chosen_points_desensitized[model_num]}\n")
 
-    histogram_bins = iter_num // 5
+
+
+
+    # Generate plot of best model
+    plot_chosen_points(silu, best_chosen_points, initial_range, show_plot=False, save_fig_name=os.path.join(run_dir, f"ppo_silu_approx_best_model_in_run_{len(best_chosen_points)}_points_{best_model_timestamp}.png"))
+
+    histogram_bins = max(1,iter_num // 20)
     # Generate histogram of rewards
     plt.hist(list_of_rewards, bins=histogram_bins)
     plt.title('Histogram of Rewards')
     plt.xlabel('Reward')
     plt.ylabel('Frequency')
-    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_best_model_in_run_histogram_of_rewards_{best_model_timestamp}.png"))
+    plt.savefig(os.path.join(run_dir, f"ppo_silu_approx_best_model_in_run_histogram_of_rewards_{best_model_timestamp}.png"))
     plt.show()
     plt.close()
     # Generate histogram of mean errors
@@ -390,7 +430,7 @@ if __name__ == '__main__':
     plt.title('Histogram of Mean Errors')
     plt.xlabel('Mean Error')
     plt.ylabel('Frequency')
-    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_best_model_in_run_histogram_of_mean_errors_{best_model_timestamp}.png"))
+    plt.savefig(os.path.join(run_dir, f"ppo_silu_approx_best_model_in_run_histogram_of_mean_errors_{best_model_timestamp}.png"))
     plt.show()
     plt.close()
     # Generate histogram of max errors
@@ -398,7 +438,7 @@ if __name__ == '__main__':
     plt.title('Histogram of Max Errors')
     plt.xlabel('Max Error')
     plt.ylabel('Frequency')
-    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_best_model_in_run_histogram_of_max_errors_{best_model_timestamp}.png"))
+    plt.savefig(os.path.join(run_dir, f"ppo_silu_approx_best_model_in_run_histogram_of_max_errors_{best_model_timestamp}.png"))
     plt.show()
     plt.close()
     # Generate histogram of number of points
@@ -406,10 +446,10 @@ if __name__ == '__main__':
     plt.title('Histogram of Number of Points')
     plt.xlabel('Number of Points')
     plt.ylabel('Frequency')
-    plt.savefig(os.path.join('model_archive', f"ppo_silu_approx_best_model_in_run_histogram_of_number_of_points_{best_model_timestamp}.png"))
+    plt.savefig(os.path.join(run_dir, f"ppo_silu_approx_best_model_in_run_histogram_of_number_of_points_{best_model_timestamp}.png"))
     plt.show()
     plt.close()
 
     # Histograms overlaid with graph being lines instead of bar graphs
     figure_legend_list = ['Rewards', 'Mean Errors', 'Max Errors']
-    plot_overlapping_histogram(list_of_rewards, list_of_mean_errors, list_of_max_errors, figure_legend=figure_legend_list, figure_name=os.path.join('model_archive', f"ppo_silu_approx_best_model_in_run_histograms_overlaid_{best_model_timestamp}.png"))
+    plot_overlapping_histogram(list_of_rewards, list_of_mean_errors, list_of_max_errors, figure_legend=figure_legend_list, figure_name=os.path.join(run_dir, f"ppo_silu_approx_best_model_in_run_histograms_overlaid_{best_model_timestamp}.png"))

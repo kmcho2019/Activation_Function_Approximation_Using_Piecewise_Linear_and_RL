@@ -47,7 +47,7 @@ def silu_curvature_alt(x):
 # the variables are slightly different from common_reward_function to reflect the use of the sigmoid function
 def common_reward_function_sigmoid(mean_error, max_error):
     weighted_error = 0.2 * mean_error + 0.8 * max_error
-    reward = 100 * np.exp(-weighted_error * 10)
+    reward = 100 * np.exp(-weighted_error * 30)
     return reward
 
 # takes in the list of all points chosen by the agent and the initial range
@@ -328,14 +328,14 @@ def plot_overlapping_histogram(A, B, C, figure_legend=None, figure_name=None):
 
 if __name__ == '__main__':
     initial_range = (-8, 8)
-    max_num_points = 10
+    max_num_points = 8
     # Start the training
     model, final_chosen_points, reward, mean_error, max_error = train_ppo(initial_range=initial_range, num_points=max_num_points)
 
     # short delay to prevent the tqdm progress bar from being printed before the earlier process outputs
     time.sleep(0.1)
     # after iter_num of training runs, pick the best one and save it
-    iter_num = 100
+    iter_num = 1500
     best_reward = float('-inf')
     best_model = None
     best_chosen_points = None

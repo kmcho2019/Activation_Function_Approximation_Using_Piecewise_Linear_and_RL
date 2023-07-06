@@ -149,9 +149,50 @@ def segment_random_search_function_in_discrete_interval(function, point_range, n
             best_points = random_points
     return best_points, best_reward, mean_error, max_error
 
+# The segment points are symmetrical respect to the center of the interval
+def segment_random_search_function_in_discrete_interval_symmetrical(function, point_range, num_half_points, point_interval=0.01,
+                                                        search_iteration_number=10000, is_sigmoid=False):
+    best_reward = float('-inf')
+    mean_error = None
+    max_error = None
+    best_points = []
+
+    # Exclude both ends of the partial_interval
+    possible_points_array = np.arange(point_range[0] + point_interval, ((point_range[0] + point_range[1]) / 2), point_interval)
+    for _ in tqdm.tqdm(range(int(search_iteration_number))):
+        # random_points = sorted(np.random.uniform(low=point_range[0], high=point_range[1], size=num_points))
+        # choose random points in discrete array
+        partial_points = np.random.choice(possible_points_array, size=num_half_points, replace=False)
+        # sort random points to be in ascending order
+        partial_points.sort()
+        # complete points to be symmetrical
+        flipped_points = point_range[0] + point_range[1] - partial_points
+        flipped_points.sort()
+        random_points = np.concatenate((partial_points, flipped_points))
+        step_size = 0.001  # determines the accuracy of the least square fit that generates the approximation of the silu function
+        total_number_of_steps = int((point_range[1] - point_range[0]) / step_size) + 1
+        # construct the piecewise linear approximation of the input function
+        piecewise_function = combined_function_generator(function, random_points, total_number_of_steps, is_sigmoid=
+        is_sigmoid)
+        # compute the mean and max error of the approximation compared to the input function
+        x = np.linspace(point_range[0], point_range[1], total_number_of_steps)
+        reference_val = function(x)
+        approximation_val = piecewise_function(x)
+        mean_error = np.mean(np.abs(reference_val - approximation_val))
+        max_error = np.max(np.abs(reference_val - approximation_val))
+        # construct the reward function
+        # the reward function takes the linear weighted sum of mean and max error and takes a form of a
+        # monotonic decreasing function whose value is between 0 and 10
+        # the reward function is constructed in such a way that the agent will be rewarded more if the error approaches 0
+        reward = common_reward_function(mean_error, max_error)
+        if reward > best_reward:
+            best_reward = reward
+            best_points = random_points
+    return best_points, best_reward, mean_error, max_error
 
 if __name__ == '__main__':
-    iter_num = 100
+    iter_num = 10_000
+    '''
     best_points, best_reward, mean_error, max_error = segment_random_search_function(function=silu, point_range=(-8, 8),
                                                                                      num_points=10,
                                                                                      search_iteration_number=iter_num)
@@ -191,10 +232,15 @@ if __name__ == '__main__':
     # best reward:  89.47963441915222
     # mean error:  0.02355894691338284
     # max error:  0.19080689715825394
+    '''
 
     # Attempt this for sigmoid
-    output = segment_random_search_function(function=sigmoid, point_range=(-8, 8), num_points=9,
-                                            search_iteration_number=10_000, is_sigmoid=True)
+    # output = segment_random_search_function(function=sigmoid, point_range=(-8, 8), num_points=9,
+    #                                         search_iteration_number=10_000, is_sigmoid=True)
+    output = segment_random_search_function_in_discrete_interval_symmetrical(function=sigmoid, point_range=(-8, 8),
+                                                                             num_half_points=4,
+                                                                             search_iteration_number=iter_num,
+                                                                             is_sigmoid=True)
     best_points, best_reward, mean_error, max_error = output
     print('best points: ', best_points)
     print('best reward: ', best_reward)
@@ -205,3 +251,7 @@ if __name__ == '__main__':
                                      reward=best_reward, mean_error=mean_error, max_error=max_error,
                                      function_name='sigmoid', show_plot=True,
                                      save_fig_name='sigmoid_segment_random_search_10000_iterations.png')
+    # best points:  [-4.96 -2.83 -1.85 -0.96  0.96  1.85  2.83  4.96]
+    # best reward:  96.7448173619822
+    # mean error:  0.012046741274713203
+    # max error:  0.05719430017659623

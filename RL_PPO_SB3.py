@@ -125,6 +125,84 @@ def final_reward_function_silu_print(chosen_points, initial_range, verbose = Tru
 
     return reward, mean_error, max_error
 
+# takes in the list of all points chosen by the agent and the initial range
+# then it constructs a piecewise linear approximation of the sigmoid function
+# it computes the mean and max error of the approximation compared to the sigmoid function
+# with the mean and max error it constructs a reward function that is used by the agent
+def final_reward_function_sigmoid(chosen_points, initial_range):
+    # append the min value of the range and the max value of the range to the first and last position of the list
+    # with chosen_points filling the middle
+    # this is needed as the piecewise linear function constructor needs the first and last point (the range) to be the min and max
+    piecewise_function_segments = []
+    piecewise_function_segments.append(initial_range[0])
+    piecewise_function_segments.extend(chosen_points)
+    if chosen_points[-1] != initial_range[1]:
+        piecewise_function_segments.append(initial_range[1])
+    step_size = 0.001 # determines the accuracy of the least square fit that generates the approximation of the sigmoid function
+    total_number_of_steps = int((initial_range[1] - initial_range[0]) / step_size) + 1
+    # construct the piecewise linear approximation of the sigmoid function
+    piecewise_function = combined_function_generator(sigmoid, piecewise_function_segments, total_number_of_steps,
+                                                     is_sigmoid=True)
+    # compute the mean and max error of the approximation compared to the sigmoid function
+    x = np.linspace(initial_range[0], initial_range[1], total_number_of_steps)
+    sigmoid_reference_val = sigmoid(x)
+    sigmoid_approximation_val = piecewise_function(x)
+    mean_error = np.mean(np.abs(sigmoid_reference_val - sigmoid_approximation_val))
+    max_error = np.max(np.abs(sigmoid_reference_val - sigmoid_approximation_val))
+    # construct the reward function
+    # the reward function takes the linear weighted sum of mean and max error and takes a form of a
+    # monotonic decreasing function whose value is between 0 and 10
+    # the reward function is constructed in such a way that the agent will be rewarded more if the error approaches 0
+    reward = common_reward_function(mean_error, max_error)
+
+    return reward
+
+# takes in the list of all points chosen by the agent and the initial range
+# then it constructs a piecewise linear approximation of the sigmoid function
+# it computes the mean and max error of the approximation compared to the sigmoid function
+# with the mean and max error it constructs a reward function that is used by the agent
+# Returns the reward, mean error and max error
+def final_reward_error_function_sigmoid(chosen_points, initial_range, verbose = False):
+    # append the min value of the range and the max value of the range to the first and last position of the list
+    # with chosen_points filling the middle
+    # this is needed as the piecewise linear function constructor needs the first and last point (the range) to be the min and max
+    piecewise_function_segments = []
+    piecewise_function_segments.append(initial_range[0])
+    piecewise_function_segments.extend(chosen_points)
+    if chosen_points[-1] != initial_range[1]:
+        piecewise_function_segments.append(initial_range[1])
+    step_size = 0.001 # determines the accuracy of the least square fit that generates the approximation of the sigmoid function
+    total_number_of_steps = int((initial_range[1] - initial_range[0]) / step_size) + 1
+    # construct the piecewise linear approximation of the sigmoid function
+    piecewise_function = combined_function_generator(sigmoid, piecewise_function_segments, total_number_of_steps,
+                                                     is_sigmoid=True)
+    # compute the mean and max error of the approximation compared to the sigmoid function
+    x = np.linspace(initial_range[0], initial_range[1], total_number_of_steps)
+    sigmoid_reference_val = sigmoid(x)
+    sigmoid_approximation_val = piecewise_function(x)
+    mean_error = np.mean(np.abs(sigmoid_reference_val - sigmoid_approximation_val))
+    max_error = np.max(np.abs(sigmoid_reference_val - sigmoid_approximation_val))
+    # construct the reward function
+    # the reward function takes the linear weighted sum of mean and max error and takes a form of a
+    # monotonic decreasing function whose value is between 0 and 10
+    # the reward function is constructed in such a way that the agent will be rewarded more if the error approaches 0
+    reward = common_reward_function(mean_error, max_error)
+    if verbose:
+        print("mean error: ", mean_error)
+        print("max error: ", max_error)
+        print("reward: ", reward)
+
+        # visualize the function in matplotlib
+        plt.plot(x, sigmoid_reference_val, label="sigmoid")
+        plt.plot(x, sigmoid_approximation_val, label="approximation")
+        plt.scatter(np.array(chosen_points), piecewise_function(np.array(chosen_points)), color='red', label=f"chosen points: {len(chosen_points)}")
+        plt.legend()
+        plt.show()
+        plt.close()
+    return reward, mean_error, max_error
+
+
+
 # Given a function and a list of points, this function will plot the function and the piecewise linear approximation based on the points
 # And also mark the points on the plot
 def plot_chosen_points(original_function, chosen_points, initial_range, function_name='silu', show_plot = False, save_fig_name = None):
@@ -723,7 +801,24 @@ if __name__ == '__main__':
         'input_curvature_function': silu_curvature_alt,
         'input_final_reward_function': final_reward_function_silu,
         'input_final_reward_error_function': final_reward_function_silu_print,
-        'input_train_timesteps': 1_000,
+        'input_train_timesteps': 200_000,
+        'input_environment': RL_Environment_test2_continuous_action_space_generalized,
+        'input_verbose': False,
+        'input_algorithm': PPO,
+        'input_algorithm_name': 'PPO',
+        'input_policy': 'MultiInputPolicy',
+        'input_learning_rate': 0.0003
+    }
+    # Training run argument dictionary for sigmoid
+    single_train_run_function_dictionary = {
+        'input_function_name': 'sigmoid',
+        'input_num_points': 8,
+        'input_initial_range': (-8, 8),
+        'input_function': sigmoid,
+        'input_curvature_function': sigmoid_curvature,
+        'input_final_reward_function': final_reward_function_sigmoid,
+        'input_final_reward_error_function': final_reward_error_function_sigmoid,
+        'input_train_timesteps': 200_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized,
         'input_verbose': False,
         'input_algorithm': PPO,

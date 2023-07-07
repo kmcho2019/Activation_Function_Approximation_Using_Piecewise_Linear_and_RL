@@ -126,6 +126,46 @@ def silu_curvature(x):
 def silu_curvature_alt(x):
     return (2 * np.power(np.cosh(x) + 1,3) * np.abs((np.exp(x) + 1) * np.cosh(x/2) - (x + np.exp(x) + 1) * np.sinh(x/2))) / (np.power(np.power(x + np.exp(x) + 1,2) + 16 * np.power(np.cosh(x/2), 4), 1.5) * np.power(np.cosh(x/2), 3))
 
+def gelu(x):
+    return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x**3)))
+def gelu_derivative(x):
+    # Constants
+    a = 0.044715
+    sqrt_2_pi = np.sqrt(2 / np.pi)
+
+    # First derivative
+    return 0.3989422804014327 * x * (1 + 0.134145 * x ** 2) * np.cosh(sqrt_2_pi * (x + a * x ** 3)) ** (-2) + 0.5 * (
+                1 + np.tanh(sqrt_2_pi * (x + a * x ** 3)))
+
+def gelu_double_derivative(x):
+    # Constants
+    a = 0.044715
+    sqrt_2_pi = np.sqrt(2 / np.pi)
+
+    # First derivative
+    return 0.7978845608028654 * (1 + 0.134145 * x**2) * np.cosh(sqrt_2_pi * (x + a * x**3))**(-2) + 0.5 * x * (0.21406444881780073 * x * np.cosh(sqrt_2_pi * (x + a * x**3))**(-2) - (4 * (1 + 0.134145 * x**2)**2 * np.cosh(sqrt_2_pi * (x + a * x**3))**(-2) * np.tanh(sqrt_2_pi * (x + a * x**3))) / np.pi)
+
+
+def gelu_curvature(x):
+    # Constants
+    a = 0.044715
+    sqrt_2_pi = np.sqrt(2 / np.pi)
+
+    # First derivative
+    y1 = 0.3989422804014327 * x * (1 + 0.134145 * x ** 2) * np.cosh(sqrt_2_pi * (x + a * x ** 3)) ** (-2) + 0.5 * (
+                1 + np.tanh(sqrt_2_pi * (x + a * x ** 3)))
+
+    # Second derivative
+    y2 = 0.7978845608028654 * (1 + 0.134145 * x ** 2) * np.cosh(sqrt_2_pi * (x + a * x ** 3)) ** (-2) + 0.5 * x * (
+                0.21406444881780073 * x * np.cosh(sqrt_2_pi * (x + a * x ** 3)) ** (-2) - (
+                    4 * (1 + 0.134145 * x ** 2) ** 2 * np.cosh(sqrt_2_pi * (x + a * x ** 3)) ** (-2) * np.tanh(
+                sqrt_2_pi * (x + a * x ** 3))) / np.pi)
+
+    # Curvature
+    curvature = np.abs(y2) / ((1 + y1 ** 2) ** (3 / 2))
+
+    return curvature
+
 # generate silu approximation based on paper sigmoid implementation
 # based on 8 piecewise linear approximation version
 def silu_approx_8_pwl_paper(x):
@@ -304,6 +344,26 @@ def main():
     print('silu max curvature difference: ', max_curvature_diff)
 
     print(silu(8))
+
+    # gelu
+    y_gelu1 = gelu(x)
+    y_gelu2 = gelu_derivative(x)
+    y_gelu3 = gelu_curvature(x)
+    plt.plot(x, y_gelu1, label='gelu')
+    plt.plot(x, y_gelu2, label='gelu derivative')
+    plt.plot(x, y_gelu3, label='gelu curvature')
+    plt.legend()
+    plt.show()
+
+    # print points from -1 to 1 in intervals of 0.1 that prints the values of gelu, gelu derivative, and gelu curvature and gelu second derivative
+    for i in range(-10, 11):
+        print('x = ', i/10)
+        print('gelu = ', gelu(i/10))
+        print('gelu derivative = ', gelu_derivative(i/10))
+        print('gelu second derivative = ', gelu_double_derivative(i/10))
+        print('')
+
+
     # sigmoid_curvature_dbscan_clustering()
     # silu_curvature_dbscan_clustering()
     #
@@ -453,8 +513,10 @@ def main():
     x = np.linspace(-8, 8, 1600)
     sigmoid_curve = sigmoid_curvature(x)
     silu_curve = silu_curvature(x)
+    gelu_curve = gelu_curvature(x)
     plt.plot(x, sigmoid_curve, label='sigmoid curvature')
     plt.plot(x, silu_curve, label='SiLU curvature')
+    plt.plot(x, gelu_curve, label='GELU curvature')
     # Add lines at specific x-values
     x_lines = [-4.5, -3, -2, -1, 1, 2, 3, 4.5]
     for x_line in x_lines:
@@ -468,6 +530,7 @@ def main():
     silu_curve = silu_curvature(x)
     plt.plot(x, sigmoid_curve, label='sigmoid curvature')
     plt.plot(x, silu_curve, label='SiLU curvature')
+    plt.plot(x, gelu_curve, label='GELU curvature')
 
     plt.legend()
     plt.show()
@@ -534,6 +597,27 @@ def main():
 
 
     print('hello world')
+
+# interval [-8, 8], 1600 points
+# sigmoid approx 8 pwl, paper average error:  0.0030476128019340156
+# sigmoid approx 8 pwl, paper max error:  0.014631547538006218
+# sigmoid approx 10 pwl, paper average error:  0.0016389911676783075
+# sigmoid approx 10 pwl, paper max error:  0.007657165503313579
+# interval [-8, 8], 160000 points
+# sigmoid approx 8 pwl, paper average error:  0.00304936045957177
+# sigmoid approx 8 pwl, paper max error:  0.014830903950181606
+# sigmoid approx 10 pwl, paper average error:  0.0016398873161360707
+# sigmoid approx 10 pwl, paper max error:  0.007839571342465601
+# interval [-8, 8], 1600 points
+# SiLU approx 8 pwl, paper average error:  0.009363736483615225
+# SiLU approx 8 pwl, paper max error:  0.03550257563963344
+# SiLU approx 10 pwl, paper average error:  0.00490333276878988
+# SiLU approx 10 pwl, paper max error:  0.01583154866968258
+# interval [-8, 8], 160000 points
+# SiLU approx 8 pwl, paper average error:  0.009368018749092582
+# SiLU approx 8 pwl, paper max error:  0.03582161523362366
+# SiLU approx 10 pwl, paper average error:  0.004904972480326937
+# SiLU approx 10 pwl, paper max error:  0.016093587143338084
 
 if __name__ == '__main__':
     main()

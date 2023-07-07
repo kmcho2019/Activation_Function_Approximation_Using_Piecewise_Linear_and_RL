@@ -26,6 +26,9 @@ def sigmoid(x):
 def silu(x):
     return x * sigmoid(x)
 
+def gelu(x):
+    return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x**3)))
+
 def sigmoid_curvature(x):
     return (np.abs(np.exp(-2 * x)-np.exp(-x))* np.power(1+np.exp(-x),3))/np.sqrt(np.power(1 + 4 * np.exp(-x) + 7 * np.exp(-2 * x) + 4 * np.exp(-3 * x) + np.exp(-4 * x), 3))
 
@@ -43,6 +46,26 @@ def silu_curvature(x):
 
 def silu_curvature_alt(x):
     return (2 * np.power(np.cosh(x) + 1,3) * np.abs((np.exp(x) + 1) * np.cosh(x/2) - (x + np.exp(x) + 1) * np.sinh(x/2))) / (np.power(np.power(x + np.exp(x) + 1,2) + 16 * np.power(np.cosh(x/2), 4), 1.5) * np.power(np.cosh(x/2), 3))
+
+def gelu_curvature(x):
+    # Constants
+    a = 0.044715
+    sqrt_2_pi = np.sqrt(2 / np.pi)
+
+    # First derivative
+    y1 = 0.3989422804014327 * x * (1 + 0.134145 * x ** 2) * np.cosh(sqrt_2_pi * (x + a * x ** 3)) ** (-2) + 0.5 * (
+                1 + np.tanh(sqrt_2_pi * (x + a * x ** 3)))
+
+    # Second derivative
+    y2 = 0.7978845608028654 * (1 + 0.134145 * x ** 2) * np.cosh(sqrt_2_pi * (x + a * x ** 3)) ** (-2) + 0.5 * x * (
+                0.21406444881780073 * x * np.cosh(sqrt_2_pi * (x + a * x ** 3)) ** (-2) - (
+                    4 * (1 + 0.134145 * x ** 2) ** 2 * np.cosh(sqrt_2_pi * (x + a * x ** 3)) ** (-2) * np.tanh(
+                sqrt_2_pi * (x + a * x ** 3))) / np.pi)
+
+    # Curvature
+    curvature = np.abs(y2) / ((1 + y1 ** 2) ** (3 / 2))
+
+    return curvature
 
 
 # serves as the common reward function for final_reward_function_silu and final_reward_function_silu_print
@@ -195,6 +218,83 @@ def final_reward_error_function_sigmoid(chosen_points, initial_range, verbose = 
         # visualize the function in matplotlib
         plt.plot(x, sigmoid_reference_val, label="sigmoid")
         plt.plot(x, sigmoid_approximation_val, label="approximation")
+        plt.scatter(np.array(chosen_points), piecewise_function(np.array(chosen_points)), color='red', label=f"chosen points: {len(chosen_points)}")
+        plt.legend()
+        plt.show()
+        plt.close()
+    return reward, mean_error, max_error
+
+
+# takes in the list of all points chosen by the agent and the initial range
+# then it constructs a piecewise linear approximation of the gelu function
+# it computes the mean and max error of the approximation compared to the gelu function
+# with the mean and max error it constructs a reward function that is used by the agent
+def final_reward_function_gelu(chosen_points, initial_range):
+    # append the min value of the range and the max value of the range to the first and last position of the list
+    # with chosen_points filling the middle
+    # this is needed as the piecewise linear function constructor needs the first and last point (the range) to be the min and max
+    piecewise_function_segments = []
+    piecewise_function_segments.append(initial_range[0])
+    piecewise_function_segments.extend(chosen_points)
+    if chosen_points[-1] != initial_range[1]:
+        piecewise_function_segments.append(initial_range[1])
+    step_size = 0.001 # determines the accuracy of the least square fit that generates the approximation of the gelu function
+    total_number_of_steps = int((initial_range[1] - initial_range[0]) / step_size) + 1
+    # construct the piecewise linear approximation of the gelu function
+    piecewise_function = combined_function_generator(gelu, piecewise_function_segments, total_number_of_steps,
+                                                     is_sigmoid=False)
+    # compute the mean and max error of the approximation compared to the gelu function
+    x = np.linspace(initial_range[0], initial_range[1], total_number_of_steps)
+    gelu_reference_val = gelu(x)
+    gelu_approximation_val = piecewise_function(x)
+    mean_error = np.mean(np.abs(gelu_reference_val - gelu_approximation_val))
+    max_error = np.max(np.abs(gelu_reference_val - gelu_approximation_val))
+    # construct the reward function
+    # the reward function takes the linear weighted sum of mean and max error and takes a form of a
+    # monotonic decreasing function whose value is between 0 and 10
+    # the reward function is constructed in such a way that the agent will be rewarded more if the error approaches 0
+    reward = common_reward_function(mean_error, max_error)
+
+    return reward
+
+# takes in the list of all points chosen by the agent and the initial range
+# then it constructs a piecewise linear approximation of the gelu function
+# it computes the mean and max error of the approximation compared to the gelu function
+# with the mean and max error it constructs a reward function that is used by the agent
+# Returns the reward, mean error and max error
+def final_reward_error_function_gelu(chosen_points, initial_range, verbose = False):
+    # append the min value of the range and the max value of the range to the first and last position of the list
+    # with chosen_points filling the middle
+    # this is needed as the piecewise linear function constructor needs the first and last point (the range) to be the min and max
+    piecewise_function_segments = []
+    piecewise_function_segments.append(initial_range[0])
+    piecewise_function_segments.extend(chosen_points)
+    if chosen_points[-1] != initial_range[1]:
+        piecewise_function_segments.append(initial_range[1])
+    step_size = 0.001 # determines the accuracy of the least square fit that generates the approximation of the gelu function
+    total_number_of_steps = int((initial_range[1] - initial_range[0]) / step_size) + 1
+    # construct the piecewise linear approximation of the gelu function
+    piecewise_function = combined_function_generator(gelu, piecewise_function_segments, total_number_of_steps,
+                                                     is_sigmoid=False)
+    # compute the mean and max error of the approximation compared to the gelu function
+    x = np.linspace(initial_range[0], initial_range[1], total_number_of_steps)
+    gelu_reference_val = gelu(x)
+    gelu_approximation_val = piecewise_function(x)
+    mean_error = np.mean(np.abs(gelu_reference_val - gelu_approximation_val))
+    max_error = np.max(np.abs(gelu_reference_val - gelu_approximation_val))
+    # construct the reward function
+    # the reward function takes the linear weighted sum of mean and max error and takes a form of a
+    # monotonic decreasing function whose value is between 0 and 10
+    # the reward function is constructed in such a way that the agent will be rewarded more if the error approaches 0
+    reward = common_reward_function(mean_error, max_error)
+    if verbose:
+        print("mean error: ", mean_error)
+        print("max error: ", max_error)
+        print("reward: ", reward)
+
+        # visualize the function in matplotlib
+        plt.plot(x, gelu_reference_val, label="gelu")
+        plt.plot(x, gelu_approximation_val, label="approximation")
         plt.scatter(np.array(chosen_points), piecewise_function(np.array(chosen_points)), color='red', label=f"chosen points: {len(chosen_points)}")
         plt.legend()
         plt.show()
@@ -819,6 +919,23 @@ if __name__ == '__main__':
         'input_final_reward_function': final_reward_function_sigmoid,
         'input_final_reward_error_function': final_reward_error_function_sigmoid,
         'input_train_timesteps': 200_000,
+        'input_environment': RL_Environment_test2_continuous_action_space_generalized,
+        'input_verbose': False,
+        'input_algorithm': PPO,
+        'input_algorithm_name': 'PPO',
+        'input_policy': 'MultiInputPolicy',
+        'input_learning_rate': 0.0003
+    }
+    # Training run argument dictionary for gelu
+    single_train_run_function_dictionary = {
+        'input_function_name': 'gelu',
+        'input_num_points': 10,
+        'input_initial_range': (-8, 8),
+        'input_function': gelu,
+        'input_curvature_function': gelu_curvature,
+        'input_final_reward_function': final_reward_function_gelu,
+        'input_final_reward_error_function': final_reward_error_function_gelu,
+        'input_train_timesteps': 10_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized,
         'input_verbose': False,
         'input_algorithm': PPO,

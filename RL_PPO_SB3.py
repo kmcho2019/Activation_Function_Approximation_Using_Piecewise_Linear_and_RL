@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from stable_baselines3 import DQN, PPO
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.vec_env import VecNormalize
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.evaluation import evaluate_policy
 import datetime
 import os
 import tqdm
@@ -125,7 +127,7 @@ def final_reward_function_silu_print(chosen_points, initial_range, verbose = Tru
 
 # Given a function and a list of points, this function will plot the function and the piecewise linear approximation based on the points
 # And also mark the points on the plot
-def plot_chosen_points(original_function, chosen_points, initial_range, show_plot = False, save_fig_name = None):
+def plot_chosen_points(original_function, chosen_points, initial_range, function_name='silu', show_plot = False, save_fig_name = None):
     piecewise_function_segments = []
     piecewise_function_segments.append(initial_range[0])
     piecewise_function_segments.extend(chosen_points)
@@ -141,7 +143,7 @@ def plot_chosen_points(original_function, chosen_points, initial_range, show_plo
     silu_approximation_val = piecewise_function(x)
     # visualize the function in matplotlib
     # visualize the function in matplotlib
-    plt.plot(x, silu_reference_val, label="silu")
+    plt.plot(x, silu_reference_val, label=function_name)
     plt.plot(x, silu_approximation_val, label="approximation")
     plt.scatter(np.array(chosen_points), piecewise_function(np.array(chosen_points)), color='red',
                 label=f"chosen points: {len(chosen_points)}")
@@ -151,6 +153,60 @@ def plot_chosen_points(original_function, chosen_points, initial_range, show_plo
     if save_fig_name is not None:
         plt.savefig(save_fig_name)
     plt.close()
+
+# Implementation taken from segment_random_search_baseline.py
+# Expends upon the functionality of plot_chosen_points by also plotting the x coordinates of the chosen points
+def plot_chosen_points_x_coord_draft(original_function, chosen_points, initial_range, reward, mean_error, max_error,
+                                     function_name='silu', show_plot=False, save_fig_name=None):
+    piecewise_function_segments = []
+    piecewise_function_segments.append(initial_range[0])
+    piecewise_function_segments.extend(chosen_points)
+    if chosen_points[-1] != initial_range[1]:
+        piecewise_function_segments.append(initial_range[1])
+    step_size = 0.001  # determines the accuracy of the least square fit that generates the approximation of the silu function
+    total_number_of_steps = int((initial_range[1] - initial_range[0]) / step_size) + 1
+    # construct the piecewise linear approximation of the silu function
+    piecewise_function = combined_function_generator(original_function, piecewise_function_segments,
+                                                     total_number_of_steps, False)
+    # compute the mean and max error of the approximation compared to the silu function
+    x = np.linspace(initial_range[0], initial_range[1], total_number_of_steps)
+    reference_val = original_function(x)
+    approximation_val = piecewise_function(x)
+    # visualize the function in matplotlib
+    if show_plot:
+        # visualize the function in matplotlib
+        plt.plot(x, reference_val, label=function_name)
+        plt.plot(x, approximation_val, label="approximation")
+        plt.scatter(np.array(chosen_points), piecewise_function(np.array(chosen_points)), color='red',
+                    label=f"chosen points: {len(chosen_points)}")
+        # Add x-coordinate text near the points
+        for i, point in enumerate(chosen_points):
+            plt.annotate(f"{point:.3f}", (point, piecewise_function(point)), xytext=(5, -10),
+                         textcoords='offset points', ha='left', va='top')
+        # Add reward, mean error, and max error to the legends as text and numbers
+        legend_text = f"reward: {reward:.3f}, mean error: {mean_error:.3f}, max error: {max_error:.3f}"
+        plt.legend(title=legend_text)
+        plt.show()
+        plt.close()
+    if save_fig_name is not None:
+        # Introduced a pause to allow the plot to be saved
+        plt.pause(0.1)
+        # visualize the function in matplotlib
+        plt.plot(x, reference_val, label=function_name)
+        plt.plot(x, approximation_val, label="approximation")
+        plt.scatter(np.array(chosen_points), piecewise_function(np.array(chosen_points)), color='red',
+                    label=f"chosen points: {len(chosen_points)}")
+        # Add x-coordinate text near the points
+        for i, point in enumerate(chosen_points):
+            plt.annotate(f"{point:.3f}", (point, piecewise_function(point)), xytext=(5, -10),
+                         textcoords='offset points', ha='left', va='top')
+        # Add reward, mean error, and max error to the legends as text and numbers
+        legend_text = f"reward: {reward:.3f}, mean error: {mean_error:.3f}, max error: {max_error:.3f}"
+        plt.legend(title=legend_text)
+        plt.savefig(save_fig_name)
+        plt.close()
+
+
 # Define the RL environment using gym
 # function with range (-8, 8) and 10 points, which can be changed during initialization
 # Each round an agent will choose a number inside the initial range.
@@ -223,6 +279,104 @@ class RL_Environment(gym.Env):
             reward = silu_curvature_alt(chosen_point)
             # return value from step should be: observation, reward, terminated, truncated, info
             return np.array([self.points_left, self.range[0], self.initial_range[1] - self.range[0]]), reward, False, False, {}
+
+# Implementation copied and modified from RL_Environment.py (original RL_Environment_test2_continuous_action_space)
+# Changes the original RL_Environment to have an observation space separated into 3 parts using Dict
+# This allowed the remaining points to be a Discrete space, while the last chosen point and the space between the end of the range and the chosen point to be a Box space
+# This allows more accurate representation
+# The action space was changed to be continuous, it used to have something like 1600 actions, which is too much for the agent to learn
+# Each action used to represent a point in the range and did not represent movement
+# now each action represents a point in the range normalized to [-1, 1]=>(0, 0.5 * (initial_range[1] - initial_range[0]))
+# RL_Environment_test2_continuous_action_space is changed to take in functions for the reward
+# It is able to accommodate other functions besides SiLU
+class RL_Environment_test2_continuous_action_space_generalized(gym.Env):
+    def __init__(self, initial_range, num_points, input_curvature_function, input_final_reward_function):
+        super(RL_Environment_test2_continuous_action_space_generalized, self).__init__()
+        self.initial_range = initial_range
+        self.range = self.initial_range
+        self.total_points = num_points
+        self.points_left = self.total_points
+        self.chosen_points = []
+        self.curvature_function = input_curvature_function
+        self.final_reward_function = input_final_reward_function
+
+        # Change action space to be continuous
+        self.action_space = gym.spaces.Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+
+
+        # Define the observation space as a Dict space
+        num_points_space = gym.spaces.Discrete(self.total_points + 1)
+        last_point_space = gym.spaces.Box(low=np.array([self.initial_range[0]], dtype=np.float32),
+                                          high=np.array([self.initial_range[1]], dtype=np.float32))
+        space_to_end_space = gym.spaces.Box(low=np.array([0.], dtype=np.float32),
+                                            high=np.array([self.initial_range[1] - self.initial_range[0]], dtype=np.float32))
+
+        self.observation_space = gym.spaces.Dict({
+            'num_points_left': num_points_space,
+            'last_chosen_point': last_point_space,
+            'space_to_end': space_to_end_space
+        })
+
+    def reset(self, seed=None, **kwargs):
+        self.range = self.initial_range
+        self.points_left = self.total_points
+        self.chosen_points = []
+        # return value from reset should be: observation, info
+        return {
+            'num_points_left': self.points_left,
+            'last_chosen_point': np.array([self.range[0]], dtype=np.float32),
+            'space_to_end': np.array([self.initial_range[1] - self.initial_range[0]], dtype=np.float32)
+        }, {}
+
+    def step(self, action):
+        # Execute one step within the environment
+        initial_range_length = self.initial_range[1] - self.initial_range[0]
+        last_chosen_point = self.range[0] if self.chosen_points else self.initial_range[0]
+        # action is a number between -1 and 1, or [-1, 1]
+        # this means that the agent takes a step of [0, 1/2 of the initial range] starting from last_chosen_point
+        # if there is no last_chosen_point, then the agent starts from the left most point of initial range
+        chosen_point = (action[0] + 1) * (initial_range_length / 4) + last_chosen_point
+
+        # Check if the chosen point is in the range
+        if self.range[0] <= chosen_point <= self.range[1]:
+            self.chosen_points.append(chosen_point)
+            self.range = (chosen_point, self.range[1])
+            self.points_left -= 1
+        else:
+            # If not, return a reward of -100 and reset, heavily penalize early truncation
+            reward = -100
+            # when agent goes out of bounds
+            chosen_point = self.initial_range[1]
+            self.chosen_points.append(chosen_point)
+            self.range = (chosen_point, self.range[1])
+            # return value from step should be: observation, reward, terminated, truncated, info
+            return {
+                'num_points_left': self.points_left,
+                'last_chosen_point': np.array([self.range[0]], dtype=np.float32),
+                'space_to_end': np.array([self.initial_range[1] - self.range[0]], dtype=np.float32)
+            }, reward, False, True, {}
+
+        # Check if all points are used up
+        if self.points_left == 0:
+            # Calculate final reward and reward for the chosen point
+            final_reward = self.final_reward_function(self.chosen_points, self.initial_range)  # this function should be defined
+            reward_for_choosing_point = self.curvature_function(chosen_point)  # this function should be defined
+            combined_reward = final_reward + reward_for_choosing_point
+            # return value from step should be: observation, reward, terminated, truncated, info
+            return {
+                'num_points_left': self.points_left,
+                'last_chosen_point': np.array([self.range[0]], dtype=np.float32),
+                'space_to_end': np.array([self.initial_range[1] - self.range[0]], dtype=np.float32)
+            }, combined_reward, True, False, {}
+        else:
+            # Calculate reward for the chosen point
+            reward = self.curvature_function(chosen_point)  # this function should be defined
+            # return value from step should be: observation, reward, terminated, truncated, info
+            return {
+                'num_points_left': self.points_left,
+                'last_chosen_point': np.array([self.range[0]], dtype=np.float32),
+                'space_to_end': np.array([self.initial_range[1] - self.range[0]], dtype=np.float32)
+            }, reward, False, False, {}
 
 
 # Training function
@@ -325,7 +479,106 @@ def plot_overlapping_histogram(A, B, C, figure_legend=None, figure_name=None):
     plt.close()
 
 
-if __name__ == '__main__':
+# Takes in various arguments like function name, range, number of points, etc. and returns result and model
+# Completely configurable in terms of different functions and number of points
+# Uses the new modified environment with Dict space and continuous action space
+# Derived for use in RL_Environment_test2_continuous_action_space
+def single_train_run_function(
+        input_function_name,
+        input_num_points,
+        input_initial_range,
+        input_function,
+        input_curvature_function,
+        input_final_reward_function,
+        input_final_reward_error_function,
+        input_train_timesteps,
+        input_environment,
+        input_verbose,
+        input_algorithm_name,
+        input_algorithm,
+        input_policy,
+        input_learning_rate
+):
+    # Get the time stamp for the run
+    run_time_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Create a directory for the run
+    run_dir = os.path.join('run_archive', f'{input_function_name}_{input_num_points}_points_{run_time_stamp}_single_model_run_train_timestep_{input_train_timesteps}')
+    os.mkdir(run_dir)
+    # Set up environment for run
+    monitor_env = Monitor(env=input_environment(initial_range=input_initial_range, num_points=input_num_points,
+                                                 input_curvature_function=input_curvature_function,
+                                                 input_final_reward_function=input_final_reward_function
+                                                 ),
+                      filename=os.path.join(run_dir, f'run_monitor_{run_time_stamp}.csv'),
+                      )
+    run_env = DummyVecEnv([lambda: monitor_env])
+
+    tensorboard_name = f'{input_algorithm_name}_{input_function_name}_{input_num_points}_points_train_timestep_{input_train_timesteps}_single_model_run_{run_time_stamp}'
+    # Create the model
+    model = input_algorithm(policy=input_policy, env=run_env, learning_rate=input_learning_rate,
+                            verbose=input_verbose, tensorboard_log='test_environment_tensorboard_log')
+    model.learn(total_timesteps=input_train_timesteps,
+                tb_log_name=tensorboard_name,
+                progress_bar=True)
+
+    # Evaluate the model
+    mean_reward, std_reward = evaluate_policy(model, run_env, n_eval_episodes=10)
+    print('Model Evaluation Results:')
+    print(f'Mean Reward: {mean_reward}, Std Reward: {std_reward}')
+
+    # Save the model
+    model_name = f'{input_algorithm_name}_{input_function_name}_{input_num_points}_points_train_timestep_{input_train_timesteps}_single_model_run_{run_time_stamp}'
+    model.save(os.path.join(run_dir, f'{model_name}'))
+
+    # Get the final chosen points
+    obs = run_env.reset()
+    for step in range(input_num_points):
+        action, _ = model.predict(obs, deterministic=True)
+        l = run_env.envs[0].chosen_points
+        obs, mid_run_reward, done, info = run_env.step(action)
+        if done:
+            final_reward, final_mean_error, final_max_error = input_final_reward_error_function(l, input_initial_range, verbose=False)
+            final_chosen_points = l
+            print('Final Chosen Points: ', final_chosen_points)
+            print('Final Reward: ', final_reward)
+            print('Mean Error: ', final_mean_error)
+            print('Max Error: ', final_max_error)
+            # Plot the final chosen points and graph
+            final_plot_name = os.path.join(run_dir, f'{model_name}_final_chosen_points_figure.png')
+            plot_chosen_points_x_coord_draft(
+                original_function=input_function,
+                chosen_points=final_chosen_points,
+                initial_range=input_initial_range,
+                reward=final_reward,
+                mean_error=final_mean_error,
+                max_error=final_max_error,
+                function_name=input_function_name,
+                show_plot=True,
+                save_fig_name=final_plot_name)
+            # Save the logs and the final chosen points
+            with open(os.path.join(run_dir, f'{model_name}_log.txt'), 'w') as f:
+                f.write('Function: ' + input_function_name + '\n')
+                f.write('Number of Points: ' + str(input_num_points) + '\n')
+                f.write('Train Timesteps: ' + str(input_train_timesteps) + '\n')
+                f.write('Policy: ' + input_algorithm_name + '\n')
+                f.write('Learning Rate: ' + str(input_learning_rate) + '\n')
+                f.write(f'Model Evaluation Results:\nMean Reward: {mean_reward}, Std Reward: {std_reward}\n')
+                f.write(f'Final Chosen Points: {final_chosen_points}\n')
+                f.write(f'Final Reward: {final_reward}\n')
+                f.write(f'Mean Error: {final_mean_error}\n')
+                f.write(f'Max Error: {final_max_error}\n')
+                f.write(f'Run Time Stamp: {run_time_stamp}\n')
+            break
+
+# This is a function that was directly taken from the main portion of the RL_PPO_SB3.py code.
+# It runs multiple training iterations and saves the best model by comparing its reward.
+# This was due to the fact that before the environment was reworked
+# in RL_Environment_Test and RL_Environment_test2_continuous_action_space
+# the training was very unstable and required multiple iterations.
+# This function is not currently used as the modifications in the requirement made multiple iterations unnecessary.
+# It is kept here for reference.
+# If multiple iterations are needed in the future, this function can be modified to work with the new environment.
+def multi_train_run_function_DRAFT_WIP():
     initial_range = (-8, 8)
     max_num_points = 10
     # Start the training
@@ -453,3 +706,29 @@ if __name__ == '__main__':
     # Histograms overlaid with graph being lines instead of bar graphs
     figure_legend_list = ['Rewards', 'Mean Errors', 'Max Errors']
     plot_overlapping_histogram(list_of_rewards, list_of_mean_errors, list_of_max_errors, figure_legend=figure_legend_list, figure_name=os.path.join(run_dir, f"ppo_silu_approx_best_model_in_run_histograms_overlaid_{best_model_timestamp}.png"))
+
+
+
+
+
+
+
+if __name__ == '__main__':
+    # Training run argument dictionary
+    single_train_run_function_dictionary = {
+        'input_function_name': 'silu',
+        'input_num_points': 11,
+        'input_initial_range': (-8, 8),
+        'input_function': silu,
+        'input_curvature_function': silu_curvature_alt,
+        'input_final_reward_function': final_reward_function_silu,
+        'input_final_reward_error_function': final_reward_function_silu_print,
+        'input_train_timesteps': 1_000,
+        'input_environment': RL_Environment_test2_continuous_action_space_generalized,
+        'input_verbose': False,
+        'input_algorithm': PPO,
+        'input_algorithm_name': 'PPO',
+        'input_policy': 'MultiInputPolicy',
+        'input_learning_rate': 0.0003
+    }
+    single_train_run_function(**single_train_run_function_dictionary)

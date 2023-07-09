@@ -6,6 +6,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.common.vec_env import VecNormalize
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.callbacks import EvalCallback
 import datetime
 import os
 import tqdm
@@ -695,18 +696,29 @@ def single_train_run_function(
     # Create the model
     model = input_algorithm(policy=input_policy, env=run_env, learning_rate=input_learning_rate,
                             verbose=input_verbose, tensorboard_log='test_environment_tensorboard_log')
+
+    # Initialize the callback
+    eval_env = DummyVecEnv([lambda: input_environment(initial_range=input_initial_range, num_points=input_num_points,
+                                                      input_curvature_function=input_curvature_function,
+                                                      input_final_reward_function=input_final_reward_function
+                                                      )])
+    callback = EvalCallback(eval_env, best_model_save_path=run_dir,
+                            log_path=run_dir, eval_freq=500,
+                            deterministic=True, render=False,
+                            verbose=input_verbose)
     model.learn(total_timesteps=input_train_timesteps,
                 tb_log_name=tensorboard_name,
-                progress_bar=True)
+                progress_bar=True,
+                callback=callback)
 
     # Evaluate the model
     mean_reward, std_reward = evaluate_policy(model, run_env, n_eval_episodes=10)
-    print('Model Evaluation Results:')
+    print('Final Model Evaluation Results:')
     print(f'Mean Reward: {mean_reward}, Std Reward: {std_reward}')
 
     # Save the model
     model_name = f'{input_algorithm_name}_{input_function_name}_{input_num_points}_points_train_timestep_{input_train_timesteps}_single_model_run_{run_time_stamp}'
-    model.save(os.path.join(run_dir, f'{model_name}'))
+    model.save(os.path.join(run_dir, f'{model_name}_final_model'))
 
     # Get the final chosen points
     obs = run_env.reset()
@@ -722,7 +734,7 @@ def single_train_run_function(
             print('Mean Error: ', final_mean_error)
             print('Max Error: ', final_max_error)
             # Plot the final chosen points and graph
-            final_plot_name = os.path.join(run_dir, f'{model_name}_final_chosen_points_figure.png')
+            final_plot_name = os.path.join(run_dir, f'{model_name}_final_model_final_chosen_points_figure.png')
             plot_chosen_points_x_coord_draft(
                 original_function=input_function,
                 chosen_points=final_chosen_points,
@@ -734,7 +746,7 @@ def single_train_run_function(
                 show_plot=True,
                 save_fig_name=final_plot_name)
             # Save the logs and the final chosen points
-            with open(os.path.join(run_dir, f'{model_name}_log.txt'), 'w') as f:
+            with open(os.path.join(run_dir, f'{model_name}_final_model_log.txt'), 'w') as f:
                 f.write('Function: ' + input_function_name + '\n')
                 f.write('Number of Points: ' + str(input_num_points) + '\n')
                 f.write('Train Timesteps: ' + str(input_train_timesteps) + '\n')
@@ -748,6 +760,52 @@ def single_train_run_function(
                 f.write(f'Run Time Stamp: {run_time_stamp}\n')
             break
 
+    # Get the evaluation result for best model
+    best_model = input_algorithm.load(os.path.join(run_dir, 'best_model.zip'))
+    # Evaluate the best model
+    mean_reward, std_reward = evaluate_policy(best_model, eval_env, n_eval_episodes=10)
+    print('Best Model Evaluation Results:')
+    print(f'Mean Reward: {mean_reward}, Std Reward: {std_reward}')
+
+    # Get the final chosen points from best mdoel
+    obs = eval_env.reset()
+    for step in range(input_num_points):
+        action, _ = model.predict(obs, deterministic=True)
+        l = eval_env.envs[0].chosen_points
+        obs, mid_run_reward, done, info = eval_env.step(action)
+        if done:
+            final_reward, final_mean_error, final_max_error = input_final_reward_error_function(l, input_initial_range, verbose=False)
+            final_chosen_points = l
+            print('Final Chosen Points: ', final_chosen_points)
+            print('Final Reward: ', final_reward)
+            print('Mean Error: ', final_mean_error)
+            print('Max Error: ', final_max_error)
+            # Plot the final chosen points and graph
+            final_plot_name = os.path.join(run_dir, f'{model_name}_best_model_final_chosen_points_figure.png')
+            plot_chosen_points_x_coord_draft(
+                original_function=input_function,
+                chosen_points=final_chosen_points,
+                initial_range=input_initial_range,
+                reward=final_reward,
+                mean_error=final_mean_error,
+                max_error=final_max_error,
+                function_name=input_function_name,
+                show_plot=True,
+                save_fig_name=final_plot_name)
+            # Save the logs and the final chosen points
+            with open(os.path.join(run_dir, f'{model_name}_best_model_log.txt'), 'w') as f:
+                f.write('Function: ' + input_function_name + '\n')
+                f.write('Number of Points: ' + str(input_num_points) + '\n')
+                f.write('Train Timesteps: ' + str(input_train_timesteps) + '\n')
+                f.write('Policy: ' + input_algorithm_name + '\n')
+                f.write('Learning Rate: ' + str(input_learning_rate) + '\n')
+                f.write(f'Model Evaluation Results:\nMean Reward: {mean_reward}, Std Reward: {std_reward}\n')
+                f.write(f'Final Chosen Points: {final_chosen_points}\n')
+                f.write(f'Final Reward: {final_reward}\n')
+                f.write(f'Mean Error: {final_mean_error}\n')
+                f.write(f'Max Error: {final_max_error}\n')
+                f.write(f'Run Time Stamp: {run_time_stamp}\n')
+            break
 # This is a function that was directly taken from the main portion of the RL_PPO_SB3.py code.
 # It runs multiple training iterations and saves the best model by comparing its reward.
 # This was due to the fact that before the environment was reworked
@@ -935,7 +993,7 @@ if __name__ == '__main__':
         'input_curvature_function': gelu_curvature,
         'input_final_reward_function': final_reward_function_gelu,
         'input_final_reward_error_function': final_reward_error_function_gelu,
-        'input_train_timesteps': 10_000,
+        'input_train_timesteps': 200_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized,
         'input_verbose': False,
         'input_algorithm': PPO,

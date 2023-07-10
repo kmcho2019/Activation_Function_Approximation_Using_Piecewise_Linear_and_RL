@@ -11,6 +11,7 @@ import datetime
 import os
 import tqdm
 import time
+from scipy.optimize import fsolve
 
 
 from least_sq_approximation import matrix_row_generator
@@ -557,6 +558,150 @@ class RL_Environment_test2_continuous_action_space_generalized(gym.Env):
                 'space_to_end': np.array([self.initial_range[1] - self.range[0]], dtype=np.float32)
             }, reward, False, False, {}
 
+# Functions used for generating nonlinear mapping
+# P is the hyperparameter that controls the range of the mapping and represents 0.5 of initial range length
+# It takes general logistic function of the form P / (C + Q * exp(B * x))
+# and finds the parameters C, Q, B that satisfy the following equations: (P being the input hyperparameter)
+# P / (C + Q * exp(B)) = 0.005 * P
+# P / (C + Q) = 1
+# P / (C + Q * exp(-B)) = 0.99 * P
+# The solution is found using fsolve from scipy.optimize
+# The function asymmetric_map is the nonlinear mapping function
+# It is able to map a number between -1 and 1 to a number between 0.005 * P and 0.99 * P
+# Able to focus on the 0~1 of the output where most of the action takes place
+def configure_equations(P):
+    def return_equation(x):
+        C, Q, B = x
+
+        eq1 = P / (C + Q * np.exp(B)) - 0.005 * P
+        eq2 = P / (C + Q) - 1
+        eq3 = P / (C + Q * np.exp(-B)) - 0.99 * P
+
+        return [eq1, eq2, eq3]
+    return return_equation
+
+def asymmetric_map(x, C, Q, B, P):
+    return P / (C + Q * np.exp(-B * x))
+
+def form_asymmetric_map_function(P, initial_guess=(1, 1, 1)):
+    P_equations = configure_equations(P)
+    solution = fsolve(P_equations, initial_guess)
+    C, Q, B = solution[0], solution[1], solution[2]
+    return lambda x: asymmetric_map(x, C, Q, B, P)
+
+
+# Iterate upon the previous environment, but this time, the curvature function is normalized, max is 0.2, min is 0
+# Also the action[-1,1] is mapped nonlinearly, previously the mapping was linear but now the mapping uses
+# a generalized logistic function
+# Previously linear mapping [-1, 1] => [0, 0.5 * initial_range_length]
+# Now generalized logistic mapping: -1 => 0.005 * initial_range_length, 0 1=> 1, 1 => 0.99 * initial_range_length
+# This was done because most spaces between points are very small, so the agent should be able to take smaller steps
+# The re-mapping prioritizes smaller steps which are more common
+class RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature(gym.Env):
+    def __init__(self, initial_range, num_points, input_curvature_function, input_final_reward_function):
+        super(RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature, self).__init__()
+        self.initial_range = initial_range
+        self.range = self.initial_range
+        self.total_points = num_points
+        self.points_left = self.total_points
+        self.chosen_points = []
+        self.curvature_function = input_curvature_function
+        self.final_reward_function = input_final_reward_function
+        # Curvature normalization parameter
+        self.max_curvature_reward = 0.2
+        # Takes maximum curvature reward and divides it by the maximum curvature value within range
+        self.curvature_normalization_parameter = \
+            self.max_curvature_reward / np.max(np.arange(self.initial_range[0], self.initial_range[1], 0.01))
+
+        # Action space nonlinear mapping function
+        # Maps normalized action between [-1, 1] into actual point coordinates
+        self.action_space_mapping_function = \
+            form_asymmetric_map_function(0.5 * (self.initial_range[1] - self.initial_range[0]))
+
+        # Change action space to be continuous
+        self.action_space = gym.spaces.Box(low=-1, high=1, shape=(1,), dtype=np.float32)
+
+
+        # Define the observation space as a Dict space
+        num_points_space = gym.spaces.Discrete(self.total_points + 1)
+        last_point_space = gym.spaces.Box(low=np.array([self.initial_range[0]], dtype=np.float32),
+                                          high=np.array([self.initial_range[1]], dtype=np.float32))
+        space_to_end_space = gym.spaces.Box(low=np.array([0.], dtype=np.float32),
+                                            high=np.array([self.initial_range[1] - self.initial_range[0]], dtype=np.float32))
+
+        self.observation_space = gym.spaces.Dict({
+            'num_points_left': num_points_space,
+            'last_chosen_point': last_point_space,
+            'space_to_end': space_to_end_space
+        })
+
+    def reset(self, seed=None, **kwargs):
+        self.range = self.initial_range
+        self.points_left = self.total_points
+        self.chosen_points = []
+        # return value from reset should be: observation, info
+        return {
+            'num_points_left': self.points_left,
+            'last_chosen_point': np.array([self.range[0]], dtype=np.float32),
+            'space_to_end': np.array([self.initial_range[1] - self.initial_range[0]], dtype=np.float32)
+        }, {}
+
+    def step(self, action):
+        # Execute one step within the environment
+        initial_range_length = self.initial_range[1] - self.initial_range[0]
+        last_chosen_point = self.range[0] if self.chosen_points else self.initial_range[0]
+        # action is a number between -1 and 1, or [-1, 1]
+        # this means that the agent takes a step of [0.005 of the 1/2 of the initial range, 0.99 of the 1/2 of the initial range] starting from last_chosen_point
+        # if there is no last_chosen_point, then the agent starts from the left most point of initial range
+
+        chosen_point = self.action_space_mapping_function(action[0]) + last_chosen_point
+
+        '''
+        # Previous linear mapping function, now replaced with generalized logistic function
+        chosen_point = (action[0] + 1) * (initial_range_length / 4) + last_chosen_point
+        '''
+
+        # Check if the chosen point is in the range
+        if self.range[0] <= chosen_point <= self.range[1]:
+            self.chosen_points.append(chosen_point)
+            self.range = (chosen_point, self.range[1])
+            self.points_left -= 1
+        else:
+            # If not, return a reward of -100 and reset, heavily penalize early truncation
+            reward = -100
+            # when agent goes out of bounds
+            chosen_point = self.initial_range[1]
+            self.chosen_points.append(chosen_point)
+            self.range = (chosen_point, self.range[1])
+            # return value from step should be: observation, reward, terminated, truncated, info
+            return {
+                'num_points_left': self.points_left,
+                'last_chosen_point': np.array([self.range[0]], dtype=np.float32),
+                'space_to_end': np.array([self.initial_range[1] - self.range[0]], dtype=np.float32)
+            }, reward, False, True, {}
+
+        # Check if all points are used up
+        if self.points_left == 0:
+            # Calculate final reward and reward for the chosen point
+            final_reward = self.final_reward_function(self.chosen_points, self.initial_range)  # this function should be defined
+            reward_for_choosing_point = self.curvature_normalization_parameter * self.curvature_function(chosen_point)  # this function should be defined
+            combined_reward = final_reward + reward_for_choosing_point
+            # return value from step should be: observation, reward, terminated, truncated, info
+            return {
+                'num_points_left': self.points_left,
+                'last_chosen_point': np.array([self.range[0]], dtype=np.float32),
+                'space_to_end': np.array([self.initial_range[1] - self.range[0]], dtype=np.float32)
+            }, combined_reward, True, False, {}
+        else:
+            # Calculate reward for the chosen point
+            reward = self.curvature_normalization_parameter * self.curvature_function(chosen_point)  # this function should be defined
+            # return value from step should be: observation, reward, terminated, truncated, info
+            return {
+                'num_points_left': self.points_left,
+                'last_chosen_point': np.array([self.range[0]], dtype=np.float32),
+                'space_to_end': np.array([self.initial_range[1] - self.range[0]], dtype=np.float32)
+            }, reward, False, False, {}
+
 
 # Training function
 def train_ppo(test_enabled=True, initial_range=(-8, 8), num_points=10, learning_rate=0.0002, train_timesteps= 10_000, save_model=False, save_logs=False, verbose=True):
@@ -951,16 +1096,16 @@ def multi_train_run_function_DRAFT_WIP():
 
 if __name__ == '__main__':
     # Training run argument dictionary
-    single_train_run_function_dictionary = {
+    single_train_run_function_dictionary_silu = {
         'input_function_name': 'silu',
-        'input_num_points': 11,
+        'input_num_points': 8,
         'input_initial_range': (-8, 8),
         'input_function': silu,
         'input_curvature_function': silu_curvature_alt,
         'input_final_reward_function': final_reward_function_silu,
         'input_final_reward_error_function': final_reward_function_silu_print,
-        'input_train_timesteps': 200_000,
-        'input_environment': RL_Environment_test2_continuous_action_space_generalized,
+        'input_train_timesteps': 100_000,
+        'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
         'input_algorithm_name': 'PPO',
@@ -968,7 +1113,7 @@ if __name__ == '__main__':
         'input_learning_rate': 0.0003
     }
     # Training run argument dictionary for sigmoid
-    single_train_run_function_dictionary = {
+    single_train_run_function_dictionary_sigmoid = {
         'input_function_name': 'sigmoid',
         'input_num_points': 8,
         'input_initial_range': (-8, 8),
@@ -976,8 +1121,8 @@ if __name__ == '__main__':
         'input_curvature_function': sigmoid_curvature,
         'input_final_reward_function': final_reward_function_sigmoid,
         'input_final_reward_error_function': final_reward_error_function_sigmoid,
-        'input_train_timesteps': 200_000,
-        'input_environment': RL_Environment_test2_continuous_action_space_generalized,
+        'input_train_timesteps': 1_000_000,
+        'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
         'input_algorithm_name': 'PPO',
@@ -985,7 +1130,7 @@ if __name__ == '__main__':
         'input_learning_rate': 0.0003
     }
     # Training run argument dictionary for gelu
-    single_train_run_function_dictionary = {
+    single_train_run_function_dictionary_gelu = {
         'input_function_name': 'gelu',
         'input_num_points': 10,
         'input_initial_range': (-8, 8),
@@ -993,12 +1138,12 @@ if __name__ == '__main__':
         'input_curvature_function': gelu_curvature,
         'input_final_reward_function': final_reward_function_gelu,
         'input_final_reward_error_function': final_reward_error_function_gelu,
-        'input_train_timesteps': 200_000,
-        'input_environment': RL_Environment_test2_continuous_action_space_generalized,
+        'input_train_timesteps': 300_000,
+        'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
         'input_algorithm_name': 'PPO',
         'input_policy': 'MultiInputPolicy',
         'input_learning_rate': 0.0003
     }
-    single_train_run_function(**single_train_run_function_dictionary)
+    single_train_run_function(**single_train_run_function_dictionary_gelu)

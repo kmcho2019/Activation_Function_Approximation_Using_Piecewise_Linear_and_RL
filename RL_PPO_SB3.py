@@ -76,11 +76,32 @@ def common_reward_function(mean_error, max_error):
     reward = 100 * np.exp(-weighted_error * 5)
     return reward
 
+# new reward function to deal with the issues of the previous common_reward_function
+# the previous reward function was too generous with errors that were relatively large
+# for example mean error: 0.015337637732471146, max error: 0.08115555668721605
+# resulted in error of 71.17988906069726, with maximum possible reward being 100
+# this is fairly good result respect to the maximum but the error is still relatively large
+# RL model had a problem with this and got stuck on a local minima and could not improve
+# (this was especially prone with the gelu function but happened with silu as well)
+# points tended to cluster around and skip small nuances of the function
+# this reward function is stricter with errors that are relatively large and has a sharper curve respect to input errors
+# rewards increase much more quickly with smaller errors and vice versa
+# for example the above example error(mean:0.015337637732471146, max: 0.08115555668721605)
+# results in error of 14.686018886887354, with maximum possible reward being 10000 (when approximation has 0 error)
+# this encourages the model to explore more and not get stuck on local minima, due to promise of greater reward
+# reasonable expectation for best error is around 0.001 which would result in reward of 1000
+def reciprocal_error_average_reward_function(mean_error, max_error):
+    # add a small constant to avoid division by zero and cap the reward at 10000
+    weighted_error = 0.2 * mean_error + 0.8 * max_error + 0.0001
+    reward = 1 / weighted_error
+    return reward
+
+
 # takes in the list of all points chosen by the agent and the initial range
 # then it constructs a piecewise linear approximation of the silu function
 # it computes the mean and max error of the approximation compared to the silu function
 # with the mean and max error it constructs a reward function that is used by the agent
-def final_reward_function_silu(chosen_points, initial_range):
+def final_reward_function_silu(chosen_points, initial_range, input_reward_function=common_reward_function):
     # append the min value of the range and the max value of the range to the first and last position of the list
     # with chosen_points filling the middle
     # this is needed as the piecewise linear function constructor needs the first and last point (the range) to be the min and max
@@ -103,13 +124,13 @@ def final_reward_function_silu(chosen_points, initial_range):
     # the reward function takes the linear weighted sum of mean and max error and takes a form of a
     # monotonic decreasing function whose value is between 0 and 10
     # the reward function is constructed in such a way that the agent will be rewarded more if the error approaches 0
-    reward = common_reward_function(mean_error, max_error)
+    reward = input_reward_function(mean_error, max_error)
 
     return reward
 
 # takes in the list of all points chosen by the agent and the initial range
 # and prints the values of the reward and error
-def final_reward_function_silu_print(chosen_points, initial_range, verbose = True):
+def final_reward_function_silu_print(chosen_points, initial_range, verbose = True, input_reward_function=common_reward_function):
     # append the min value of the range and the max value of the range to the first and last position of the list
     # with chosen_points filling the middle
     # this is needed as the piecewise linear function constructor needs the first and last point (the range) to be the min and max
@@ -132,7 +153,7 @@ def final_reward_function_silu_print(chosen_points, initial_range, verbose = Tru
     # the reward function takes the linear weighted sum of mean and max error and takes a form of a
     # monotonic decreasing function whose value is between 0 and 10
     # the reward function is constructed in such a way that the agent will be rewarded more if the error approaches 0
-    reward = common_reward_function(mean_error, max_error)
+    reward = input_reward_function(mean_error, max_error)
 
     if verbose:
         print("mean error: ", mean_error)
@@ -154,7 +175,7 @@ def final_reward_function_silu_print(chosen_points, initial_range, verbose = Tru
 # then it constructs a piecewise linear approximation of the sigmoid function
 # it computes the mean and max error of the approximation compared to the sigmoid function
 # with the mean and max error it constructs a reward function that is used by the agent
-def final_reward_function_sigmoid(chosen_points, initial_range):
+def final_reward_function_sigmoid(chosen_points, initial_range, input_reward_function=common_reward_function):
     # append the min value of the range and the max value of the range to the first and last position of the list
     # with chosen_points filling the middle
     # this is needed as the piecewise linear function constructor needs the first and last point (the range) to be the min and max
@@ -178,7 +199,7 @@ def final_reward_function_sigmoid(chosen_points, initial_range):
     # the reward function takes the linear weighted sum of mean and max error and takes a form of a
     # monotonic decreasing function whose value is between 0 and 10
     # the reward function is constructed in such a way that the agent will be rewarded more if the error approaches 0
-    reward = common_reward_function(mean_error, max_error)
+    reward = input_reward_function(mean_error, max_error)
 
     return reward
 
@@ -187,7 +208,7 @@ def final_reward_function_sigmoid(chosen_points, initial_range):
 # it computes the mean and max error of the approximation compared to the sigmoid function
 # with the mean and max error it constructs a reward function that is used by the agent
 # Returns the reward, mean error and max error
-def final_reward_error_function_sigmoid(chosen_points, initial_range, verbose = False):
+def final_reward_error_function_sigmoid(chosen_points, initial_range, verbose = False, input_reward_function=common_reward_function):
     # append the min value of the range and the max value of the range to the first and last position of the list
     # with chosen_points filling the middle
     # this is needed as the piecewise linear function constructor needs the first and last point (the range) to be the min and max
@@ -211,7 +232,7 @@ def final_reward_error_function_sigmoid(chosen_points, initial_range, verbose = 
     # the reward function takes the linear weighted sum of mean and max error and takes a form of a
     # monotonic decreasing function whose value is between 0 and 10
     # the reward function is constructed in such a way that the agent will be rewarded more if the error approaches 0
-    reward = common_reward_function(mean_error, max_error)
+    reward = input_reward_function(mean_error, max_error)
     if verbose:
         print("mean error: ", mean_error)
         print("max error: ", max_error)
@@ -231,7 +252,7 @@ def final_reward_error_function_sigmoid(chosen_points, initial_range, verbose = 
 # then it constructs a piecewise linear approximation of the gelu function
 # it computes the mean and max error of the approximation compared to the gelu function
 # with the mean and max error it constructs a reward function that is used by the agent
-def final_reward_function_gelu(chosen_points, initial_range):
+def final_reward_function_gelu(chosen_points, initial_range, input_reward_function=common_reward_function):
     # append the min value of the range and the max value of the range to the first and last position of the list
     # with chosen_points filling the middle
     # this is needed as the piecewise linear function constructor needs the first and last point (the range) to be the min and max
@@ -255,7 +276,7 @@ def final_reward_function_gelu(chosen_points, initial_range):
     # the reward function takes the linear weighted sum of mean and max error and takes a form of a
     # monotonic decreasing function whose value is between 0 and 10
     # the reward function is constructed in such a way that the agent will be rewarded more if the error approaches 0
-    reward = common_reward_function(mean_error, max_error)
+    reward = input_reward_function(mean_error, max_error)
 
     return reward
 
@@ -264,7 +285,7 @@ def final_reward_function_gelu(chosen_points, initial_range):
 # it computes the mean and max error of the approximation compared to the gelu function
 # with the mean and max error it constructs a reward function that is used by the agent
 # Returns the reward, mean error and max error
-def final_reward_error_function_gelu(chosen_points, initial_range, verbose = False):
+def final_reward_error_function_gelu(chosen_points, initial_range, verbose = False, input_reward_function=common_reward_function):
     # append the min value of the range and the max value of the range to the first and last position of the list
     # with chosen_points filling the middle
     # this is needed as the piecewise linear function constructor needs the first and last point (the range) to be the min and max
@@ -288,7 +309,7 @@ def final_reward_error_function_gelu(chosen_points, initial_range, verbose = Fal
     # the reward function takes the linear weighted sum of mean and max error and takes a form of a
     # monotonic decreasing function whose value is between 0 and 10
     # the reward function is constructed in such a way that the agent will be rewarded more if the error approaches 0
-    reward = common_reward_function(mean_error, max_error)
+    reward = input_reward_function(mean_error, max_error)
     if verbose:
         print("mean error: ", mean_error)
         print("max error: ", max_error)
@@ -435,7 +456,7 @@ class RL_Environment(gym.Env):
             self.points_left -= 1
         else:
             # If not, return a reward of -10 and reset, heavily penalize early truncation
-            reward = -100
+            reward = -10
 
             # when agent goes out of bounds
             chosen_point = self.initial_range[1]
@@ -573,8 +594,8 @@ def configure_equations(P):
     def return_equation(x):
         C, Q, B = x
 
-        eq1 = P / (C + Q * np.exp(B)) - 0.005 * P
-        eq2 = P / (C + Q) - 1
+        eq1 = P / (C + Q * np.exp(B)) - 0.01 * P
+        eq2 = P / (C + Q) - 2
         eq3 = P / (C + Q * np.exp(-B)) - 0.99 * P
 
         return [eq1, eq2, eq3]
@@ -598,7 +619,7 @@ def form_asymmetric_map_function(P, initial_guess=(1, 1, 1)):
 # This was done because most spaces between points are very small, so the agent should be able to take smaller steps
 # The re-mapping prioritizes smaller steps which are more common
 class RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature(gym.Env):
-    def __init__(self, initial_range, num_points, input_curvature_function, input_final_reward_function):
+    def __init__(self, initial_range, num_points, input_curvature_function, input_reward_function_definition, input_final_reward_function):
         super(RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature, self).__init__()
         self.initial_range = initial_range
         self.range = self.initial_range
@@ -606,9 +627,10 @@ class RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_nor
         self.points_left = self.total_points
         self.chosen_points = []
         self.curvature_function = input_curvature_function
+        self.reward_function_definition = input_reward_function_definition
         self.final_reward_function = input_final_reward_function
         # Curvature normalization parameter
-        self.max_curvature_reward = 0.2
+        self.max_curvature_reward = 0.5
         # Takes maximum curvature reward and divides it by the maximum curvature value within range
         self.curvature_normalization_parameter = \
             self.max_curvature_reward / np.max(np.arange(self.initial_range[0], self.initial_range[1], 0.01))
@@ -654,21 +676,24 @@ class RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_nor
         # this means that the agent takes a step of [0.005 of the 1/2 of the initial range, 0.99 of the 1/2 of the initial range] starting from last_chosen_point
         # if there is no last_chosen_point, then the agent starts from the left most point of initial range
 
+
         chosen_point = self.action_space_mapping_function(action[0]) + last_chosen_point
 
         '''
         # Previous linear mapping function, now replaced with generalized logistic function
-        chosen_point = (action[0] + 1) * (initial_range_length / 4) + last_chosen_point
+        # due to poor result from nonlinear mapping(plateaued too early), revert to linear mapping
+        # except adding a small constant to the chosen_point to prevent the agent from choosing the same point again
+        chosen_point = (action[0] + 1) * (initial_range_length / 4) + last_chosen_point + 0.1
         '''
 
-        # Check if the chosen point is in the range
-        if self.range[0] <= chosen_point <= self.range[1]:
+        # Check if the chosen point is in the range, use < on left side to avoid duplicate points
+        if self.range[0] < chosen_point <= self.range[1]:
             self.chosen_points.append(chosen_point)
             self.range = (chosen_point, self.range[1])
             self.points_left -= 1
         else:
-            # If not, return a reward of -100 and reset, heavily penalize early truncation
-            reward = -100
+            # If not, return a reward of -10 and reset, heavily penalize early truncation
+            reward = -10
             # when agent goes out of bounds
             chosen_point = self.initial_range[1]
             self.chosen_points.append(chosen_point)
@@ -683,7 +708,7 @@ class RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_nor
         # Check if all points are used up
         if self.points_left == 0:
             # Calculate final reward and reward for the chosen point
-            final_reward = self.final_reward_function(self.chosen_points, self.initial_range)  # this function should be defined
+            final_reward = self.final_reward_function(self.chosen_points, self.initial_range, self.reward_function_definition)  # this function should be defined
             reward_for_choosing_point = self.curvature_normalization_parameter * self.curvature_function(chosen_point)  # this function should be defined
             combined_reward = final_reward + reward_for_choosing_point
             # return value from step should be: observation, reward, terminated, truncated, info
@@ -813,6 +838,7 @@ def single_train_run_function(
         input_initial_range,
         input_function,
         input_curvature_function,
+        input_error_function_definition,
         input_final_reward_function,
         input_final_reward_error_function,
         input_train_timesteps,
@@ -830,8 +856,9 @@ def single_train_run_function(
     os.mkdir(run_dir)
     # Set up environment for run
     monitor_env = Monitor(env=input_environment(initial_range=input_initial_range, num_points=input_num_points,
-                                                 input_curvature_function=input_curvature_function,
-                                                 input_final_reward_function=input_final_reward_function
+                                                input_curvature_function=input_curvature_function,
+                                                input_error_function_definition=input_error_function_definition,
+                                                input_final_reward_function=input_final_reward_function
                                                  ),
                       filename=os.path.join(run_dir, f'run_monitor_{run_time_stamp}.csv'),
                       )
@@ -845,10 +872,11 @@ def single_train_run_function(
     # Initialize the callback
     eval_env = DummyVecEnv([lambda: input_environment(initial_range=input_initial_range, num_points=input_num_points,
                                                       input_curvature_function=input_curvature_function,
+                                                      input_error_function_definition=input_error_function_definition,
                                                       input_final_reward_function=input_final_reward_function
                                                       )])
     callback = EvalCallback(eval_env, best_model_save_path=run_dir,
-                            log_path=run_dir, eval_freq=500,
+                            log_path=run_dir, eval_freq=2048, # make eval_freq be same as batch size
                             deterministic=True, render=False,
                             verbose=input_verbose)
     model.learn(total_timesteps=input_train_timesteps,
@@ -872,7 +900,7 @@ def single_train_run_function(
         l = run_env.envs[0].chosen_points
         obs, mid_run_reward, done, info = run_env.step(action)
         if done:
-            final_reward, final_mean_error, final_max_error = input_final_reward_error_function(l, input_initial_range, verbose=False)
+            final_reward, final_mean_error, final_max_error = input_final_reward_error_function(l, input_initial_range, verbose=False, input_reward_function=input_error_function_definition)
             final_chosen_points = l
             print('Final Chosen Points: ', final_chosen_points)
             print('Final Reward: ', final_reward)
@@ -912,14 +940,14 @@ def single_train_run_function(
     print('Best Model Evaluation Results:')
     print(f'Mean Reward: {mean_reward}, Std Reward: {std_reward}')
 
-    # Get the final chosen points from best mdoel
+    # Get the final chosen points from best model
     obs = eval_env.reset()
     for step in range(input_num_points):
         action, _ = model.predict(obs, deterministic=True)
         l = eval_env.envs[0].chosen_points
         obs, mid_run_reward, done, info = eval_env.step(action)
         if done:
-            final_reward, final_mean_error, final_max_error = input_final_reward_error_function(l, input_initial_range, verbose=False)
+            final_reward, final_mean_error, final_max_error = input_final_reward_error_function(l, input_initial_range, verbose=False, input_reward_function=input_error_function_definition)
             final_chosen_points = l
             print('Final Chosen Points: ', final_chosen_points)
             print('Final Reward: ', final_reward)
@@ -950,7 +978,7 @@ def single_train_run_function(
                 f.write(f'Mean Error: {final_mean_error}\n')
                 f.write(f'Max Error: {final_max_error}\n')
                 f.write(f'Run Time Stamp: {run_time_stamp}\n')
-            break
+            return final_reward, final_mean_error, final_max_error
 # This is a function that was directly taken from the main portion of the RL_PPO_SB3.py code.
 # It runs multiple training iterations and saves the best model by comparing its reward.
 # This was due to the fact that before the environment was reworked
@@ -1103,8 +1131,9 @@ if __name__ == '__main__':
         'input_function': silu,
         'input_curvature_function': silu_curvature_alt,
         'input_final_reward_function': final_reward_function_silu,
+        'input_error_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_error_function': final_reward_function_silu_print,
-        'input_train_timesteps': 100_000,
+        'input_train_timesteps': 300_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
@@ -1119,9 +1148,10 @@ if __name__ == '__main__':
         'input_initial_range': (-8, 8),
         'input_function': sigmoid,
         'input_curvature_function': sigmoid_curvature,
+        'input_error_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_sigmoid,
         'input_final_reward_error_function': final_reward_error_function_sigmoid,
-        'input_train_timesteps': 1_000_000,
+        'input_train_timesteps': 300_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
@@ -1132,10 +1162,11 @@ if __name__ == '__main__':
     # Training run argument dictionary for gelu
     single_train_run_function_dictionary_gelu = {
         'input_function_name': 'gelu',
-        'input_num_points': 10,
+        'input_num_points': 8,
         'input_initial_range': (-8, 8),
         'input_function': gelu,
         'input_curvature_function': gelu_curvature,
+        'input_error_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_gelu,
         'input_final_reward_error_function': final_reward_error_function_gelu,
         'input_train_timesteps': 300_000,
@@ -1146,4 +1177,5 @@ if __name__ == '__main__':
         'input_policy': 'MultiInputPolicy',
         'input_learning_rate': 0.0003
     }
-    single_train_run_function(**single_train_run_function_dictionary_gelu)
+    final_reward, final_mean_error, final_max_error = \
+        single_train_run_function(**single_train_run_function_dictionary_gelu)

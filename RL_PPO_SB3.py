@@ -838,7 +838,7 @@ def single_train_run_function(
         input_initial_range,
         input_function,
         input_curvature_function,
-        input_error_function_definition,
+        input_reward_function_definition,
         input_final_reward_function,
         input_final_reward_error_function,
         input_train_timesteps,
@@ -857,7 +857,7 @@ def single_train_run_function(
     # Set up environment for run
     monitor_env = Monitor(env=input_environment(initial_range=input_initial_range, num_points=input_num_points,
                                                 input_curvature_function=input_curvature_function,
-                                                input_error_function_definition=input_error_function_definition,
+                                                input_reward_function_definition=input_reward_function_definition,
                                                 input_final_reward_function=input_final_reward_function
                                                  ),
                       filename=os.path.join(run_dir, f'run_monitor_{run_time_stamp}.csv'),
@@ -872,7 +872,7 @@ def single_train_run_function(
     # Initialize the callback
     eval_env = DummyVecEnv([lambda: input_environment(initial_range=input_initial_range, num_points=input_num_points,
                                                       input_curvature_function=input_curvature_function,
-                                                      input_error_function_definition=input_error_function_definition,
+                                                      input_reward_function_definition=input_reward_function_definition,
                                                       input_final_reward_function=input_final_reward_function
                                                       )])
     callback = EvalCallback(eval_env, best_model_save_path=run_dir,
@@ -900,7 +900,7 @@ def single_train_run_function(
         l = run_env.envs[0].chosen_points
         obs, mid_run_reward, done, info = run_env.step(action)
         if done:
-            final_reward, final_mean_error, final_max_error = input_final_reward_error_function(l, input_initial_range, verbose=False, input_reward_function=input_error_function_definition)
+            final_reward, final_mean_error, final_max_error = input_final_reward_error_function(l, input_initial_range, verbose=False, input_reward_function=input_reward_function_definition)
             final_chosen_points = l
             print('Final Chosen Points: ', final_chosen_points)
             print('Final Reward: ', final_reward)
@@ -947,7 +947,7 @@ def single_train_run_function(
         l = eval_env.envs[0].chosen_points
         obs, mid_run_reward, done, info = eval_env.step(action)
         if done:
-            final_reward, final_mean_error, final_max_error = input_final_reward_error_function(l, input_initial_range, verbose=False, input_reward_function=input_error_function_definition)
+            final_reward, final_mean_error, final_max_error = input_final_reward_error_function(l, input_initial_range, verbose=False, input_reward_function=input_reward_function_definition)
             final_chosen_points = l
             print('Final Chosen Points: ', final_chosen_points)
             print('Final Reward: ', final_reward)
@@ -1131,7 +1131,7 @@ if __name__ == '__main__':
         'input_function': silu,
         'input_curvature_function': silu_curvature_alt,
         'input_final_reward_function': final_reward_function_silu,
-        'input_error_function_definition': reciprocal_error_average_reward_function,
+        'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_error_function': final_reward_function_silu_print,
         'input_train_timesteps': 300_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
@@ -1148,7 +1148,7 @@ if __name__ == '__main__':
         'input_initial_range': (-8, 8),
         'input_function': sigmoid,
         'input_curvature_function': sigmoid_curvature,
-        'input_error_function_definition': reciprocal_error_average_reward_function,
+        'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_sigmoid,
         'input_final_reward_error_function': final_reward_error_function_sigmoid,
         'input_train_timesteps': 300_000,
@@ -1166,7 +1166,7 @@ if __name__ == '__main__':
         'input_initial_range': (-8, 8),
         'input_function': gelu,
         'input_curvature_function': gelu_curvature,
-        'input_error_function_definition': reciprocal_error_average_reward_function,
+        'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_gelu,
         'input_final_reward_error_function': final_reward_error_function_gelu,
         'input_train_timesteps': 300_000,

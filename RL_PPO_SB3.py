@@ -672,10 +672,13 @@ class RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_nor
         # Execute one step within the environment
         initial_range_length = self.initial_range[1] - self.initial_range[0]
         last_chosen_point = self.range[0] if self.chosen_points else self.initial_range[0]
+        if self.chosen_points == []:
+            last_chosen_point = self.initial_range[0]
+        else:
+            last_chosen_point = self.chosen_points[-1]
         # action is a number between -1 and 1, or [-1, 1]
         # this means that the agent takes a step of [0.005 of the 1/2 of the initial range, 0.99 of the 1/2 of the initial range] starting from last_chosen_point
         # if there is no last_chosen_point, then the agent starts from the left most point of initial range
-
 
         chosen_point = self.action_space_mapping_function(action[0]) + last_chosen_point
 
@@ -688,6 +691,15 @@ class RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_nor
 
         # Check if the chosen point is in the range, use < on left side to avoid duplicate points
         if self.range[0] < chosen_point <= self.range[1]:
+            # give penalty if the points are too close to each other
+            # check previous two points in chosen_points and give penalty if furthest distance is within 0.2
+            clustering_penalty = 0
+            if len(self.chosen_points) >= 2:
+                if chosen_point - self.chosen_points[-2] < 0.2:
+                    clustering_penalty = clustering_penalty - 5
+            if len(self.chosen_points) >= 3:
+                if chosen_point - self.chosen_points[-3] < 0.3:
+                    clustering_penalty = clustering_penalty - 5
             self.chosen_points.append(chosen_point)
             self.range = (chosen_point, self.range[1])
             self.points_left -= 1
@@ -710,7 +722,7 @@ class RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_nor
             # Calculate final reward and reward for the chosen point
             final_reward = self.final_reward_function(self.chosen_points, self.initial_range, self.reward_function_definition)  # this function should be defined
             reward_for_choosing_point = self.curvature_normalization_parameter * self.curvature_function(chosen_point)  # this function should be defined
-            combined_reward = final_reward + reward_for_choosing_point
+            combined_reward = final_reward + reward_for_choosing_point + clustering_penalty
             # return value from step should be: observation, reward, terminated, truncated, info
             return {
                 'num_points_left': self.points_left,
@@ -720,12 +732,13 @@ class RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_nor
         else:
             # Calculate reward for the chosen point
             reward = self.curvature_normalization_parameter * self.curvature_function(chosen_point)  # this function should be defined
+            combined_reward = reward + clustering_penalty
             # return value from step should be: observation, reward, terminated, truncated, info
             return {
                 'num_points_left': self.points_left,
                 'last_chosen_point': np.array([self.range[0]], dtype=np.float32),
                 'space_to_end': np.array([self.initial_range[1] - self.range[0]], dtype=np.float32)
-            }, reward, False, False, {}
+            }, combined_reward, False, False, {}
 
 
 # Training function
@@ -1135,14 +1148,14 @@ if __name__ == '__main__':
         'input_final_reward_function': final_reward_function_silu,
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_error_function': final_reward_function_silu_print,
-        'input_train_timesteps': 300_000,
+        'input_train_timesteps': 200_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
         'input_algorithm_name': 'PPO',
         'input_policy': 'MultiInputPolicy',
         'input_learning_rate': 0.0001,
-        'algorithm_parameters': {'ent_coef': 0.1, 'vf_coef': 0.4}
+        'algorithm_parameters': {'ent_coef': 0.2, 'vf_coef': 0.4}
     }
     # Training run argument dictionary for sigmoid
     single_train_run_function_dictionary_sigmoid = {
@@ -1154,14 +1167,14 @@ if __name__ == '__main__':
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_sigmoid,
         'input_final_reward_error_function': final_reward_error_function_sigmoid,
-        'input_train_timesteps': 300_000,
+        'input_train_timesteps': 200_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
         'input_algorithm_name': 'PPO',
         'input_policy': 'MultiInputPolicy',
         'input_learning_rate': 0.0001,
-        'algorithm_parameters': {'ent_coef': 0.1, 'vf_coef': 0.4}
+        'algorithm_parameters': {'ent_coef': 0.2, 'vf_coef': 0.4}
     }
     # Training run argument dictionary for gelu
     single_train_run_function_dictionary_gelu = {
@@ -1173,14 +1186,14 @@ if __name__ == '__main__':
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_gelu,
         'input_final_reward_error_function': final_reward_error_function_gelu,
-        'input_train_timesteps': 300_000,
+        'input_train_timesteps': 200_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
         'input_algorithm_name': 'PPO',
         'input_policy': 'MultiInputPolicy',
         'input_learning_rate': 0.0001,
-        'algorithm_parameters': {'ent_coef': 0.1, 'vf_coef': 0.4}
+        'algorithm_parameters': {'ent_coef': 0.2, 'vf_coef': 0.4}
     }
     final_reward, final_mean_error, final_max_error = \
         single_train_run_function(**single_train_run_function_dictionary_gelu)

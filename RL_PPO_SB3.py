@@ -679,15 +679,15 @@ class RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_nor
         # action is a number between -1 and 1, or [-1, 1]
         # this means that the agent takes a step of [0.005 of the 1/2 of the initial range, 0.99 of the 1/2 of the initial range] starting from last_chosen_point
         # if there is no last_chosen_point, then the agent starts from the left most point of initial range
-
+        ''' 
         chosen_point = self.action_space_mapping_function(action[0]) + last_chosen_point
-
         '''
+
         # Previous linear mapping function, now replaced with generalized logistic function
         # due to poor result from nonlinear mapping(plateaued too early), revert to linear mapping
         # except adding a small constant to the chosen_point to prevent the agent from choosing the same point again
         chosen_point = (action[0] + 1) * (initial_range_length / 4) + last_chosen_point + 0.1
-        '''
+
 
         # Check if the chosen point is in the range, use < on left side to avoid duplicate points
         if self.range[0] < chosen_point <= self.range[1]:
@@ -697,9 +697,7 @@ class RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_nor
             if len(self.chosen_points) >= 2:
                 if chosen_point - self.chosen_points[-2] < 0.2:
                     clustering_penalty = clustering_penalty - 5
-            if len(self.chosen_points) >= 3:
-                if chosen_point - self.chosen_points[-3] < 0.3:
-                    clustering_penalty = clustering_penalty - 5
+
             self.chosen_points.append(chosen_point)
             self.range = (chosen_point, self.range[1])
             self.points_left -= 1
@@ -722,7 +720,15 @@ class RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_nor
             # Calculate final reward and reward for the chosen point
             final_reward = self.final_reward_function(self.chosen_points, self.initial_range, self.reward_function_definition)  # this function should be defined
             reward_for_choosing_point = self.curvature_normalization_parameter * self.curvature_function(chosen_point)  # this function should be defined
-            combined_reward = final_reward + reward_for_choosing_point + clustering_penalty
+            # check if there are at least 2 points left of middle of range, give small reward if true
+            even_distribution_points = 0
+            left_points = 0
+            for point in self.chosen_points:
+                if point < (self.initial_range[0] + self.initial_range[1]) / 2:
+                    left_points += 1
+            if left_points >= 2:
+                even_distribution_points = even_distribution_points + 1
+            combined_reward = final_reward + reward_for_choosing_point + clustering_penalty + even_distribution_points
             # return value from step should be: observation, reward, terminated, truncated, info
             return {
                 'num_points_left': self.points_left,
@@ -1155,7 +1161,7 @@ if __name__ == '__main__':
         'input_algorithm_name': 'PPO',
         'input_policy': 'MultiInputPolicy',
         'input_learning_rate': 0.0001,
-        'algorithm_parameters': {'ent_coef': 0.2, 'vf_coef': 0.4}
+        'algorithm_parameters': {'ent_coef': 0.1, 'vf_coef': 0.4}
     }
     # Training run argument dictionary for sigmoid
     single_train_run_function_dictionary_sigmoid = {
@@ -1174,7 +1180,7 @@ if __name__ == '__main__':
         'input_algorithm_name': 'PPO',
         'input_policy': 'MultiInputPolicy',
         'input_learning_rate': 0.0001,
-        'algorithm_parameters': {'ent_coef': 0.2, 'vf_coef': 0.4}
+        'algorithm_parameters': {'ent_coef': 0.1, 'vf_coef': 0.4}
     }
     # Training run argument dictionary for gelu
     single_train_run_function_dictionary_gelu = {
@@ -1193,7 +1199,7 @@ if __name__ == '__main__':
         'input_algorithm_name': 'PPO',
         'input_policy': 'MultiInputPolicy',
         'input_learning_rate': 0.0001,
-        'algorithm_parameters': {'ent_coef': 0.2, 'vf_coef': 0.4}
+        'algorithm_parameters': {'ent_coef': 0.1, 'vf_coef': 0.4}
     }
     final_reward, final_mean_error, final_max_error = \
         single_train_run_function(**single_train_run_function_dictionary_gelu)

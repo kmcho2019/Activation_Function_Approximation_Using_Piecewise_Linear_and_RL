@@ -847,7 +847,8 @@ def single_train_run_function(
         input_algorithm_name,
         input_algorithm,
         input_policy,
-        input_learning_rate
+        input_learning_rate,
+        algorithm_parameters
 ):
     # Get the time stamp for the run
     run_time_stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -867,7 +868,8 @@ def single_train_run_function(
     tensorboard_name = f'{input_algorithm_name}_{input_function_name}_{input_num_points}_points_train_timestep_{input_train_timesteps}_single_model_run_{run_time_stamp}'
     # Create the model
     model = input_algorithm(policy=input_policy, env=run_env, learning_rate=input_learning_rate,
-                            verbose=input_verbose, tensorboard_log='test_environment_tensorboard_log')
+                            verbose=input_verbose, tensorboard_log='test_environment_tensorboard_log',
+                            **algorithm_parameters)
 
     # Initialize the callback
     eval_env = DummyVecEnv([lambda: input_environment(initial_range=input_initial_range, num_points=input_num_points,
@@ -1139,7 +1141,8 @@ if __name__ == '__main__':
         'input_algorithm': PPO,
         'input_algorithm_name': 'PPO',
         'input_policy': 'MultiInputPolicy',
-        'input_learning_rate': 0.0003
+        'input_learning_rate': 0.0001,
+        'algorithm_parameters': {'ent_coef': 0.1, 'vf_coef': 0.4}
     }
     # Training run argument dictionary for sigmoid
     single_train_run_function_dictionary_sigmoid = {
@@ -1157,7 +1160,8 @@ if __name__ == '__main__':
         'input_algorithm': PPO,
         'input_algorithm_name': 'PPO',
         'input_policy': 'MultiInputPolicy',
-        'input_learning_rate': 0.0003
+        'input_learning_rate': 0.0001,
+        'algorithm_parameters': {'ent_coef': 0.1, 'vf_coef': 0.4}
     }
     # Training run argument dictionary for gelu
     single_train_run_function_dictionary_gelu = {
@@ -1175,7 +1179,8 @@ if __name__ == '__main__':
         'input_algorithm': PPO,
         'input_algorithm_name': 'PPO',
         'input_policy': 'MultiInputPolicy',
-        'input_learning_rate': 0.0003
+        'input_learning_rate': 0.0001,
+        'algorithm_parameters': {'ent_coef': 0.1, 'vf_coef': 0.4}
     }
     final_reward, final_mean_error, final_max_error = \
         single_train_run_function(**single_train_run_function_dictionary_gelu)

@@ -429,7 +429,7 @@ def OneCycleLR_Schedule(initial_value: float) -> Callable[[float], float]:
         :param progress_remaining:
         :return: current learning rate
         """
-        if progress_remaining < 0.9:
+        if progress_remaining > 0.9:
             # warmup step where the learning rate increases linearly from 0 to the initial learning rate
             # progress_remaining: 1 => 0
             # progress_remaining: 0.9 => initial_value
@@ -1196,7 +1196,7 @@ if __name__ == '__main__':
         'input_final_reward_function': final_reward_function_silu,
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_error_function': final_reward_function_silu_print,
-        'input_train_timesteps': 300_000,
+        'input_train_timesteps': 30_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
@@ -1215,7 +1215,7 @@ if __name__ == '__main__':
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_sigmoid,
         'input_final_reward_error_function': final_reward_error_function_sigmoid,
-        'input_train_timesteps': 300_000,
+        'input_train_timesteps': 30_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
@@ -1234,7 +1234,7 @@ if __name__ == '__main__':
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_gelu,
         'input_final_reward_error_function': final_reward_error_function_gelu,
-        'input_train_timesteps': 300_000,
+        'input_train_timesteps': 30_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,

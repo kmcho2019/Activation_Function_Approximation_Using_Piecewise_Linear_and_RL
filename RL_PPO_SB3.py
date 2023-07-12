@@ -12,6 +12,7 @@ import os
 import tqdm
 import time
 from scipy.optimize import fsolve
+from typing import Callable
 
 
 from least_sq_approximation import matrix_row_generator
@@ -376,6 +377,7 @@ def plot_chosen_points_x_coord_draft(original_function, chosen_points, initial_r
     # visualize the function in matplotlib
     if show_plot:
         # visualize the function in matplotlib
+        plt.figure(figsize=(10, 6), dpi=100)  # Set the figure size
         plt.plot(x, reference_val, label=function_name)
         plt.plot(x, approximation_val, label="approximation")
         plt.scatter(np.array(chosen_points), piecewise_function(np.array(chosen_points)), color='red',
@@ -393,6 +395,7 @@ def plot_chosen_points_x_coord_draft(original_function, chosen_points, initial_r
         # Introduced a pause to allow the plot to be saved
         plt.pause(0.1)
         # visualize the function in matplotlib
+        plt.figure(figsize=(10, 6), dpi=100)  # Set the figure size
         plt.plot(x, reference_val, label=function_name)
         plt.plot(x, approximation_val, label="approximation")
         plt.scatter(np.array(chosen_points), piecewise_function(np.array(chosen_points)), color='red',
@@ -406,6 +409,39 @@ def plot_chosen_points_x_coord_draft(original_function, chosen_points, initial_r
         plt.legend(title=legend_text)
         plt.savefig(save_fig_name)
         plt.close()
+
+# One Cycle Learning Rate Schedule
+# There is a warmup period for 0.1 of the total number of steps
+# Where the learning rate increases linearly from 0 to the initial learning rate
+# Then there is a linear decay from the initial learning rate to 0 for the rest of the steps
+def OneCycleLR_Schedule(initial_value: float) -> Callable[[float], float]:
+    """
+    OneCycle learning rate schedule.
+
+    :param initial_value: Initial learning rate.
+    :return: schedule that computes
+      current learning rate depending on remaining progress
+    """
+    def func(progress_remaining: float) -> float:
+        """
+        Progress will decrease from 1 (beginning) to 0.
+
+        :param progress_remaining:
+        :return: current learning rate
+        """
+        if progress_remaining < 0.9:
+            # warmup step where the learning rate increases linearly from 0 to the initial learning rate
+            # progress_remaining: 1 => 0
+            # progress_remaining: 0.9 => initial_value
+            return_val = initial_value * (progress_remaining-1) * (-10.0)
+        else:
+            # linear decay from the initial learning rate to 0 for the rest of the steps
+            # progress_remaining: 0.9 => initial_value
+            # progress_remaining: 0.0 => 0
+            return_val = initial_value * (progress_remaining / 0.9)
+        return return_val
+
+    return func
 
 
 # Define the RL environment using gym
@@ -892,7 +928,7 @@ def single_train_run_function(
 
     tensorboard_name = f'{input_algorithm_name}_{input_function_name}_{input_num_points}_points_train_timestep_{input_train_timesteps}_single_model_run_{run_time_stamp}'
     # Create the model
-    model = input_algorithm(policy=input_policy, env=run_env, learning_rate=input_learning_rate,
+    model = input_algorithm(policy=input_policy, env=run_env, learning_rate=OneCycleLR_Schedule(input_learning_rate),
                             verbose=input_verbose, tensorboard_log='test_environment_tensorboard_log',
                             **algorithm_parameters)
 
@@ -970,7 +1006,7 @@ def single_train_run_function(
     # Get the final chosen points from best model
     obs = eval_env.reset()
     for step in range(input_num_points):
-        action, _ = model.predict(obs, deterministic=True)
+        action, _ = best_model.predict(obs, deterministic=True)
         l = eval_env.envs[0].chosen_points
         obs, mid_run_reward, done, info = eval_env.step(action)
         if done:

@@ -410,39 +410,103 @@ def plot_chosen_points_x_coord_draft(original_function, chosen_points, initial_r
         plt.savefig(save_fig_name)
         plt.close()
 
+
+
 # One Cycle Learning Rate Schedule
 # There is a warmup period for 0.1 of the total number of steps
 # Where the learning rate increases linearly from 0 to the initial learning rate
 # Then there is a linear decay from the initial learning rate to 0 for the rest of the steps
-def OneCycleLR_Schedule(initial_value: float) -> Callable[[float], float]:
+def OneCycleLR_Schedule_Linear_MinLR(initial_value: float, warmup_proportion: float = 0.1, multiplier: float = 20.0) -> \
+Callable[[float], float]:
     """
-    OneCycle learning rate schedule.
-
+    OneCycle learning rate schedule with linear warmup and linear decay.
     :param initial_value: Initial learning rate.
-    :return: schedule that computes
-      current learning rate depending on remaining progress
+    :param warmup_proportion: Proportion of total steps allocated to warmup.
+    :param multiplier: The factor used to compute the minimum end learning rate.
+    :return: schedule that computes current learning rate depending on remaining progress
     """
+    assert 0.0 < warmup_proportion < 1.0, "Warmup proportion must be between 0 and 1."
+    min_lr = initial_value / multiplier
+
     def func(progress_remaining: float) -> float:
         """
         Progress will decrease from 1 (beginning) to 0.
-
         :param progress_remaining:
         :return: current learning rate
         """
-        if progress_remaining > 0.9:
-            # warmup step where the learning rate increases linearly from 0 to the initial learning rate
-            # progress_remaining: 1 => 0
-            # progress_remaining: 0.9 => initial_value
-            return_val = initial_value * (progress_remaining-1) * (-10.0)
+        if progress_remaining > (1 - warmup_proportion):
+            # Warmup phase: the learning rate increases linearly from 0 to the initial learning rate.
+            warmup_progress = (progress_remaining - 1) * (-1 / warmup_proportion)
+            return initial_value * warmup_progress
         else:
-            # linear decay from the initial learning rate to 0 for the rest of the steps
-            # progress_remaining: 0.9 => initial_value
-            # progress_remaining: 0.0 => 0
-            return_val = initial_value * (progress_remaining / 0.9)
-        return return_val
+            # Linear decay phase: the learning rate decreases linearly from the initial learning rate to min_lr.
+            decay_progress = progress_remaining / (1 - warmup_proportion)  # goes from 1 -> 0
+            return (initial_value - min_lr) * decay_progress + min_lr
 
     return func
 
+
+# One Cycle Learning Rate Schedule Cosine Annealing
+def OneCycleLR_Schedule_Cosine(initial_value: float, warmup_proportion: float = 0.1, multiplier: float = 20.0) -> \
+Callable[[float], float]:
+    """
+    OneCycle learning rate schedule with linear warmup and cosine annealing.
+    :param initial_value: Initial learning rate.
+    :param warmup_proportion: Proportion of total steps allocated to warmup.
+    :param multiplier: The factor used to compute the minimum end learning rate.
+    :return: schedule that computes current learning rate depending on remaining progress
+    """
+    assert 0.0 < warmup_proportion < 1.0, "Warmup proportion must be between 0 and 1."
+    min_lr = initial_value / multiplier
+
+    def func(progress_remaining: float) -> float:
+        """
+        Progress will decrease from 1 (beginning) to 0.
+        :param progress_remaining:
+        :return: current learning rate
+        """
+        if progress_remaining > (1 - warmup_proportion):
+            # Warmup phase: the learning rate increases linearly from 0 to the initial learning rate.
+            warmup_progress = (progress_remaining - 1) * (-1 / warmup_proportion)
+            return initial_value * warmup_progress
+        else:
+            # Cosine annealing phase: the learning rate decreases from the initial learning rate to min_lr following a half cosine curve.
+            annealing_progress = (progress_remaining / (warmup_proportion - 1)) + 1  # goes from 0 -> 1
+            return (initial_value - min_lr) * 0.5 * (1 + np.cos(np.pi * annealing_progress)) + min_lr
+
+    return func
+
+
+
+# One Cycle Learning Rate Schedule Exponential Annealing
+def OneCycleLR_Schedule_Exponential(initial_value: float, warmup_proportion: float = 0.1, multiplier: float = 20.0) -> \
+Callable[[float], float]:
+    """
+    OneCycle learning rate schedule with exponential warmup and exponential decay.
+    :param initial_value: Initial learning rate.
+    :param warmup_proportion: Proportion of total steps allocated to warmup.
+    :param multiplier: The factor used to compute the minimum end learning rate.
+    :return: schedule that computes current learning rate depending on remaining progress
+    """
+    assert 0.0 < warmup_proportion < 1.0, "Warmup proportion must be between 0 and 1."
+    min_lr = initial_value / multiplier
+
+    def func(progress_remaining: float) -> float:
+        """
+        Progress will decrease from 1 (beginning) to 0.
+        :param progress_remaining:
+        :return: current learning rate
+        """
+        if progress_remaining > (1 - warmup_proportion):
+            # Warmup phase: the learning rate increases linearly from 0 to the initial learning rate.
+            warmup_progress = (progress_remaining - 1) * (-1 / warmup_proportion)
+            return initial_value * warmup_progress
+        else:
+            # Exponential decay phase: the learning rate decreases exponentially from the initial learning rate to min_lr.
+            decay_progress = (progress_remaining / (warmup_proportion - 1)) + 1  # goes from 0 -> 1
+            return (initial_value - min_lr) * np.exp(-5 * decay_progress) + min_lr
+
+    return func
 
 # Define the RL environment using gym
 # function with range (-8, 8) and 10 points, which can be changed during initialization
@@ -908,7 +972,8 @@ def single_train_run_function(
         input_algorithm_name,
         input_algorithm,
         input_policy,
-        input_learning_rate,
+        input_learning_rate, # Can be a constant number like 0.001 or Schedule like OneCycleLR_Schedule_Linear_MinLR
+        learning_rate_configs, # dictionary that contains initial_value, warmup_proportion, and multiplier for schedule, if learning rate is constant this is ignored
         algorithm_parameters
 ):
     # Get the time stamp for the run
@@ -927,8 +992,16 @@ def single_train_run_function(
     run_env = DummyVecEnv([lambda: monitor_env])
 
     tensorboard_name = f'{input_algorithm_name}_{input_function_name}_{input_num_points}_points_train_timestep_{input_train_timesteps}_single_model_run_{run_time_stamp}'
+
+    # When the input_learning_rate is a constant
+    if type(input_learning_rate) == float or type(input_learning_rate) == int:
+        algorithm_learning_rate_input = input_learning_rate
+    else: # When the input_learning_rate is a schedule
+        algorithm_learning_rate_input = input_learning_rate(**learning_rate_configs)
+
+
     # Create the model
-    model = input_algorithm(policy=input_policy, env=run_env, learning_rate=OneCycleLR_Schedule(input_learning_rate),
+    model = input_algorithm(policy=input_policy, env=run_env, learning_rate=algorithm_learning_rate_input,
                             verbose=input_verbose, tensorboard_log='test_environment_tensorboard_log',
                             **algorithm_parameters)
 
@@ -987,13 +1060,18 @@ def single_train_run_function(
                 f.write('Number of Points: ' + str(input_num_points) + '\n')
                 f.write('Train Timesteps: ' + str(input_train_timesteps) + '\n')
                 f.write('Policy: ' + input_algorithm_name + '\n')
-                f.write('Learning Rate: ' + str(input_learning_rate) + '\n')
+                if type(input_learning_rate) == float or type(input_learning_rate) == int:
+                    f.write('Learning Rate: ' + str(input_learning_rate) + '\n')
+                else:
+                    f.write('Learning Rate Schedule: ' + str(input_learning_rate.__name__) + '\n')
+                    f.write('Learning Rate Schedule Configs: ' + str(learning_rate_configs) + '\n')
                 f.write(f'Model Evaluation Results:\nMean Reward: {mean_reward}, Std Reward: {std_reward}\n')
                 f.write(f'Final Chosen Points: {final_chosen_points}\n')
                 f.write(f'Final Reward: {final_reward}\n')
                 f.write(f'Mean Error: {final_mean_error}\n')
                 f.write(f'Max Error: {final_max_error}\n')
                 f.write(f'Run Time Stamp: {run_time_stamp}\n')
+                f.write(f'Algorithm Parameters: {algorithm_parameters}\n')
             break
 
     # Get the evaluation result for best model
@@ -1034,13 +1112,18 @@ def single_train_run_function(
                 f.write('Number of Points: ' + str(input_num_points) + '\n')
                 f.write('Train Timesteps: ' + str(input_train_timesteps) + '\n')
                 f.write('Policy: ' + input_algorithm_name + '\n')
-                f.write('Learning Rate: ' + str(input_learning_rate) + '\n')
+                if type(input_learning_rate) == float or type(input_learning_rate) == int:
+                    f.write('Learning Rate: ' + str(input_learning_rate) + '\n')
+                else:
+                    f.write('Learning Rate Schedule: ' + str(input_learning_rate.__name__) + '\n')
+                    f.write('Learning Rate Schedule Configs: ' + str(learning_rate_configs) + '\n')
                 f.write(f'Model Evaluation Results:\nMean Reward: {mean_reward}, Std Reward: {std_reward}\n')
                 f.write(f'Final Chosen Points: {final_chosen_points}\n')
                 f.write(f'Final Reward: {final_reward}\n')
                 f.write(f'Mean Error: {final_mean_error}\n')
                 f.write(f'Max Error: {final_max_error}\n')
                 f.write(f'Run Time Stamp: {run_time_stamp}\n')
+                f.write(f'Algorithm Parameters: {algorithm_parameters}\n')
             return final_reward, final_mean_error, final_max_error
 # This is a function that was directly taken from the main portion of the RL_PPO_SB3.py code.
 # It runs multiple training iterations and saves the best model by comparing its reward.
@@ -1196,13 +1279,14 @@ if __name__ == '__main__':
         'input_final_reward_function': final_reward_function_silu,
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_error_function': final_reward_function_silu_print,
-        'input_train_timesteps': 300_000,
+        'input_train_timesteps': 30_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
         'input_algorithm_name': 'PPO',
         'input_policy': 'MultiInputPolicy',
-        'input_learning_rate': 0.001,
+        'input_learning_rate': OneCycleLR_Schedule_Linear_MinLR,
+        'learning_rate_configs': {'initial_value': 0.001, 'warmup_proportion': 0.1, 'multiplier': 20},
         'algorithm_parameters': {'ent_coef': 0.05, 'vf_coef': 0.5}
     }
     # Training run argument dictionary for sigmoid
@@ -1215,13 +1299,14 @@ if __name__ == '__main__':
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_sigmoid,
         'input_final_reward_error_function': final_reward_error_function_sigmoid,
-        'input_train_timesteps': 300_000,
+        'input_train_timesteps': 30_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
         'input_algorithm_name': 'PPO',
         'input_policy': 'MultiInputPolicy',
-        'input_learning_rate': 0.001,
+        'input_learning_rate': OneCycleLR_Schedule_Cosine,
+        'learning_rate_configs': {'initial_value': 0.001, 'warmup_proportion': 0.1, 'multiplier': 20},
         'algorithm_parameters': {'ent_coef': 0.05, 'vf_coef': 0.5}
     }
     # Training run argument dictionary for gelu
@@ -1234,27 +1319,28 @@ if __name__ == '__main__':
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_gelu,
         'input_final_reward_error_function': final_reward_error_function_gelu,
-        'input_train_timesteps': 300_000,
+        'input_train_timesteps': 30_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
         'input_algorithm_name': 'PPO',
         'input_policy': 'MultiInputPolicy',
-        'input_learning_rate': 0.001,
+        'input_learning_rate': OneCycleLR_Schedule_Exponential,
+        'learning_rate_configs': {'initial_value': 0.001, 'warmup_proportion': 0.1, 'multiplier': 20},
         'algorithm_parameters': {'ent_coef': 0.05, 'vf_coef': 0.5}
     }
     print('gelu Run:')
-    for i in range(3):
+    for i in range(1):
         print(f'Gelu Run #{i+1}')
         final_reward, final_mean_error, final_max_error = \
             single_train_run_function(**single_train_run_function_dictionary_gelu)
     print('silu Run:')
-    for i in range(3):
+    for i in range(1):
         print(f'Silu Run #{i+1}')
         final_reward, final_mean_error, final_max_error = \
             single_train_run_function(**single_train_run_function_dictionary_silu)
     print('sigmoid Run:')
-    for i in range(3):
+    for i in range(1):
         print(f'Sigmoid Run #{i+1}')
         final_reward, final_mean_error, final_max_error = \
             single_train_run_function(**single_train_run_function_dictionary_sigmoid)

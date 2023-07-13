@@ -1279,7 +1279,7 @@ if __name__ == '__main__':
         'input_final_reward_function': final_reward_function_silu,
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_error_function': final_reward_function_silu_print,
-        'input_train_timesteps': 30_000,
+        'input_train_timesteps': 200_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
@@ -1299,7 +1299,7 @@ if __name__ == '__main__':
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_sigmoid,
         'input_final_reward_error_function': final_reward_error_function_sigmoid,
-        'input_train_timesteps': 30_000,
+        'input_train_timesteps': 200_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
@@ -1319,7 +1319,7 @@ if __name__ == '__main__':
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_gelu,
         'input_final_reward_error_function': final_reward_error_function_gelu,
-        'input_train_timesteps': 30_000,
+        'input_train_timesteps': 200_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
@@ -1329,18 +1329,42 @@ if __name__ == '__main__':
         'learning_rate_configs': {'initial_value': 0.001, 'warmup_proportion': 0.1, 'multiplier': 20},
         'algorithm_parameters': {'ent_coef': 0.05, 'vf_coef': 0.5}
     }
-    print('gelu Run:')
-    for i in range(1):
-        print(f'Gelu Run #{i+1}')
-        final_reward, final_mean_error, final_max_error = \
-            single_train_run_function(**single_train_run_function_dictionary_gelu)
-    print('silu Run:')
-    for i in range(1):
-        print(f'Silu Run #{i+1}')
-        final_reward, final_mean_error, final_max_error = \
-            single_train_run_function(**single_train_run_function_dictionary_silu)
-    print('sigmoid Run:')
-    for i in range(1):
-        print(f'Sigmoid Run #{i+1}')
-        final_reward, final_mean_error, final_max_error = \
-            single_train_run_function(**single_train_run_function_dictionary_sigmoid)
+    # Define the possible learning rate schedules and their configurations
+    lr_schedules = [OneCycleLR_Schedule_Linear_MinLR, OneCycleLR_Schedule_Cosine, OneCycleLR_Schedule_Exponential]
+    lr_configs = [
+        {'initial_value': 0.0005, 'warmup_proportion': 0.1, 'multiplier': 20},
+        {'initial_value': 0.001, 'warmup_proportion': 0.1, 'multiplier': 20},
+        {'initial_value': 0.005, 'warmup_proportion': 0.1, 'multiplier': 20},
+        {'initial_value': 0.0005, 'warmup_proportion': 0.2, 'multiplier': 20},
+        {'initial_value': 0.001, 'warmup_proportion': 0.2, 'multiplier': 20},
+        {'initial_value': 0.005, 'warmup_proportion': 0.2, 'multiplier': 20}
+    ]
+
+    # Define the base configurations for each function
+    base_configs = {
+        'silu': single_train_run_function_dictionary_silu,
+        'sigmoid': single_train_run_function_dictionary_sigmoid,
+        'gelu': single_train_run_function_dictionary_gelu
+    }
+
+    # Iterate through each function
+    for function_name, base_config in base_configs.items():
+        print(f'{function_name} Run:')
+
+        # Iterate through each learning rate schedule
+        for lr_schedule in lr_schedules:
+
+            # Iterate through each learning rate configuration
+            for config in lr_configs:
+
+                # Update the base configuration with the current learning rate schedule and configuration
+                base_config['input_learning_rate'] = lr_schedule
+                base_config['learning_rate_configs'] = config
+
+                print(f'Running with {lr_schedule.__name__} and config {config}')
+
+                # Run the training
+                for i in range(1):
+                    print(f'Run #{i + 1}')
+                    final_reward, final_mean_error, final_max_error = \
+                        single_train_run_function(**base_config)

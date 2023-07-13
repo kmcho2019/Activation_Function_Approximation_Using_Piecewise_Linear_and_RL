@@ -1196,7 +1196,7 @@ if __name__ == '__main__':
         'input_final_reward_function': final_reward_function_silu,
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_error_function': final_reward_function_silu_print,
-        'input_train_timesteps': 30_000,
+        'input_train_timesteps': 300_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
@@ -1215,7 +1215,7 @@ if __name__ == '__main__':
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_sigmoid,
         'input_final_reward_error_function': final_reward_error_function_sigmoid,
-        'input_train_timesteps': 30_000,
+        'input_train_timesteps': 300_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
@@ -1234,7 +1234,7 @@ if __name__ == '__main__':
         'input_reward_function_definition': reciprocal_error_average_reward_function,
         'input_final_reward_function': final_reward_function_gelu,
         'input_final_reward_error_function': final_reward_error_function_gelu,
-        'input_train_timesteps': 30_000,
+        'input_train_timesteps': 300_000,
         'input_environment': RL_Environment_test2_continuous_action_space_generalized_nonlinear_map_normalized_curvature,
         'input_verbose': False,
         'input_algorithm': PPO,
@@ -1244,14 +1244,17 @@ if __name__ == '__main__':
         'algorithm_parameters': {'ent_coef': 0.05, 'vf_coef': 0.5}
     }
     print('gelu Run:')
-    for i in range(1):
+    for i in range(3):
+        print(f'Gelu Run #{i+1}')
         final_reward, final_mean_error, final_max_error = \
             single_train_run_function(**single_train_run_function_dictionary_gelu)
     print('silu Run:')
-    for i in range(1):
+    for i in range(3):
+        print(f'Silu Run #{i+1}')
         final_reward, final_mean_error, final_max_error = \
             single_train_run_function(**single_train_run_function_dictionary_silu)
     print('sigmoid Run:')
-    for i in range(1):
+    for i in range(3):
+        print(f'Sigmoid Run #{i+1}')
         final_reward, final_mean_error, final_max_error = \
             single_train_run_function(**single_train_run_function_dictionary_sigmoid)

@@ -78,3 +78,55 @@ chart_function_and_approximations(sigmoid, "Sigmoid", ranges_sigmoid, a_sigmoid,
 chart_function_and_approximations(silu, "SiLU", ranges_silu, a_silu, b_silu, "silu_approximation_visualized.png")
 # GELU
 chart_function_and_approximations(gelu, "GELU", ranges_gelu, a_gelu, b_gelu, "gelu_approximation_visualized.png")
+
+plt.close()
+# Plot function and its approximation with point marks for separating segments and coordinates combined into one plot
+functions = [sigmoid, silu, gelu]
+function_names = ["Sigmoid", "SiLU", "GELU"]
+function_colors = ['red', 'green', 'blue']
+marker_colors = ['ro', 'go', 'bo']
+colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', 'orange', 'purple']
+
+ranges = [ranges_sigmoid, ranges_silu, ranges_gelu]
+a_lists = [a_sigmoid, a_silu, a_gelu]
+b_lists = [b_sigmoid, b_silu, b_gelu]
+
+# Create the figure and axes
+
+fig, ax = plt.subplots(figsize=(18, 9))
+
+# Generate the data and plot the functions and their approximations
+foo = 0
+for function, function_name, range_list, a_list, b_list in zip(functions, function_names, ranges, a_lists, b_lists):
+    # Plot function and its approximation with point marks for separating segments and coordinates
+    range_minimum = range_list[0][0]
+    range_maximum = range_list[-1][1]
+    x = np.linspace(range_minimum, range_maximum, 1000)
+
+    y = function(x)
+    y_approx = [piecewise_linear_approx(i, range_list, a_list, b_list) for i in x]
+
+    ax.plot(x, y, label=f"{function_name} function", linewidth=2, color=function_colors[foo])
+
+    for i in range(len(range_list)):
+        x_piecewise = np.linspace(range_list[i][0], range_list[i][1], 500)
+        y_piecewise = [piecewise_linear_approx(j, [range_list[i]], [a_list[i]], [b_list[i]]) for j in x_piecewise]
+
+        ax.plot(x_piecewise, y_piecewise, label=f"{a_list[i]}x + {b_list[i]} for ({range_list[i][0]}, {range_list[i][1]}]", linestyle='dashed',
+                color=colors[i])
+        ax.plot(range_list[i][0], piecewise_linear_approx(range_list[i][0], [range_list[i]], [a_list[i]], [b_list[i]]),
+                marker_colors[foo], markersize=4)  # lower bound
+        ax.plot(range_list[i][1], piecewise_linear_approx(range_list[i][1], [range_list[i]], [a_list[i]], [b_list[i]]),
+                marker_colors[foo], markersize=4)  # upper bound
+    foo = foo + 1
+
+# Set the title and labels, show the legend, and display the plot
+
+ax.set_title("Functions and Their Piecewise Linear Approximations")
+ax.set_xlabel("x")
+ax.set_ylabel("y")
+ax.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
+ax.grid(True)
+plt.tight_layout()
+plt.show()
+fig.savefig('Combined_approximation_visualization.png', bbox_inches='tight', dpi=300)

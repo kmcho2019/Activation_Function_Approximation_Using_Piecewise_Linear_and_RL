@@ -91,12 +91,33 @@ ranges = [ranges_sigmoid, ranges_silu, ranges_gelu]
 a_lists = [a_sigmoid, a_silu, a_gelu]
 b_lists = [b_sigmoid, b_silu, b_gelu]
 
+# Make the texts in plot larger to be more readable
+# Mapping from relative size to absolute size in points
+size_mapping = {
+    'xx-small': 8,
+    'x-small': 10,
+    'small': 12,
+    'medium': 14,
+    'large': 16,
+    'x-large': 20,
+    'xx-large': 24,
+}
+
+# Convert the sizes to points, double them, and set them
+plt.rcParams['axes.titlesize'] = 1.4 * size_mapping[plt.rcParams['axes.titlesize']]
+plt.rcParams['axes.labelsize'] = 1.2 * size_mapping[plt.rcParams['axes.labelsize']]
+plt.rcParams['legend.fontsize'] = 1.2 * size_mapping[plt.rcParams['legend.fontsize']]
+plt.rcParams['xtick.labelsize'] = 1.2 * size_mapping[plt.rcParams['xtick.labelsize']]
+plt.rcParams['ytick.labelsize'] = 1.2 * size_mapping[plt.rcParams['ytick.labelsize']]
+
+
 # Create the figure and axes
 
 fig, ax = plt.subplots(figsize=(18, 9))
 
 # Generate the data and plot the functions and their approximations
 foo = 0
+lines = []
 for function, function_name, range_list, a_list, b_list in zip(functions, function_names, ranges, a_lists, b_lists):
     # Plot function and its approximation with point marks for separating segments and coordinates
     range_minimum = range_list[0][0]
@@ -106,26 +127,43 @@ for function, function_name, range_list, a_list, b_list in zip(functions, functi
     y = function(x)
     y_approx = [piecewise_linear_approx(i, range_list, a_list, b_list) for i in x]
 
-    ax.plot(x, y, label=f"{function_name} function", linewidth=2, color=function_colors[foo])
+    # comma to unpack tuple
+    line, = ax.plot(x, y, label=f"{function_name} function", linewidth=2, color=function_colors[foo])
+    lines.append(line)
 
     for i in range(len(range_list)):
         x_piecewise = np.linspace(range_list[i][0], range_list[i][1], 500)
         y_piecewise = [piecewise_linear_approx(j, [range_list[i]], [a_list[i]], [b_list[i]]) for j in x_piecewise]
 
-        ax.plot(x_piecewise, y_piecewise, label=f"{a_list[i]}x + {b_list[i]} for ({range_list[i][0]}, {range_list[i][1]}]", linestyle='dashed',
+        # comma to unpack tuple
+        line, = ax.plot(x_piecewise, y_piecewise, label=f"{a_list[i]}x + {b_list[i]} for ({range_list[i][0]}, {range_list[i][1]}]", linestyle='dashed',
                 color=colors[i])
+        lines.append(line)
         ax.plot(range_list[i][0], piecewise_linear_approx(range_list[i][0], [range_list[i]], [a_list[i]], [b_list[i]]),
                 marker_colors[foo], markersize=4)  # lower bound
         ax.plot(range_list[i][1], piecewise_linear_approx(range_list[i][1], [range_list[i]], [a_list[i]], [b_list[i]]),
                 marker_colors[foo], markersize=4)  # upper bound
+
     foo = foo + 1
 
 # Set the title and labels, show the legend, and display the plot
 
+print(len(lines))
+# Separate the entries into two lists: first 20 entries and remaining 10 entries
+lines1, lines2 = lines[:20], lines[20:]
+labels1, labels2 = [line.get_label() for line in lines1], [line.get_label() for line in lines2]
+# First legend with sigmoid and SiLU for first column
+first_legend = ax.legend(lines1, labels1, ncol=1, loc='upper left', bbox_to_anchor=(0.0, 1.01))
+# Second legend with GELU for second column
+second_legend = ax.legend(lines2, labels2, ncol=1, loc='upper left', bbox_to_anchor=(0.36, 1.01))
+
+# Add the first legend manually to the current Axes
+ax.add_artist(first_legend)
+
 ax.set_title("Functions and Their Piecewise Linear Approximations")
 ax.set_xlabel("x")
 ax.set_ylabel("y")
-ax.legend(loc='upper left', bbox_to_anchor=(1.05, 1))
+# ax.legend(loc='upper left', ncol=2)
 ax.grid(True)
 plt.tight_layout()
 plt.show()

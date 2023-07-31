@@ -36,7 +36,11 @@ def chart_function_and_approximations(function, function_name, ranges, a_list, b
     for i in range(len(ranges)):
         x_piecewise = np.linspace(ranges[i][0], ranges[i][1], 500)
         y_piecewise = [piecewise_linear_approx(j, [ranges[i]], [a_list[i]], [b_list[i]]) for j in x_piecewise]
-        ax.plot(x_piecewise, y_piecewise, label=f"{a_list[i]}x + {b_list[i]} for ({ranges[i][0]}, {ranges[i][1]}]", linestyle='dashed',
+        if b_list[i] < 0:
+            function_label = f"{a_list[i]}x - {-b_list[i]} for ({ranges[i][0]}, {ranges[i][1]}]"
+        else:
+            function_label = f"{a_list[i]}x + {b_list[i]} for ({ranges[i][0]}, {ranges[i][1]}]"
+        ax.plot(x_piecewise, y_piecewise, label=f"{function_label}", linestyle='dashed',
                 color=colors[i])
         ax.plot(ranges[i][0],
                 piecewise_linear_approx(ranges[i][0], [ranges[i]], [a_list[i]], [b_list[i]]), 'ko',

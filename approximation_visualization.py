@@ -155,7 +155,7 @@ labels1, labels2 = [line.get_label() for line in lines1], [line.get_label() for 
 # First legend with sigmoid and SiLU for first column
 first_legend = ax.legend(lines1, labels1, ncol=1, loc='upper left', bbox_to_anchor=(0.0, 1.01))
 # Second legend with GELU for second column
-second_legend = ax.legend(lines2, labels2, ncol=1, loc='upper left', bbox_to_anchor=(0.36, 1.01))
+second_legend = ax.legend(lines2, labels2, ncol=1, loc='upper left', bbox_to_anchor=(0.37, 1.01))
 
 # Add the first legend manually to the current Axes
 ax.add_artist(first_legend)

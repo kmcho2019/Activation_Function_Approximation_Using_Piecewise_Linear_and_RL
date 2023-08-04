@@ -4,6 +4,7 @@ import numpy as np
 from least_sq_approximation import combined_function_generator
 from least_sq_approximation import piece_wise_linear_function_estimator
 import matplotlib.pyplot as plt
+import pandas as pd
 
 # Define the functions
 
@@ -19,7 +20,7 @@ def gelu(x):
 
 #Default values if no arguments are given
 default_function = 'GELU'
-default_points = [-5.4738750696182255, -2.5131248712539676, -0.7461250543594363, -0.3765439748764041, -0.007824301719665833, 0.35101768970489466, 0.7172322988510128, 2.5810040712356566]
+default_points = [-5.4738750696182255, -2.5131248712539676, -0.7461250543594363, -0.3765439748764041, -0.007824301719665833, 0.35101768970489466, 0.7172322988510128, 2.5810040712356566] #[-5.220260524749756, -2.494537401199341, -0.7783503055572513, -0.39581284523010285, -0.03285646438598663, 0.35468635559081996, 0.716262054443359, 2.5751369476318358]#[-5.4738750696182255, -2.5131248712539676, -0.7461250543594363, -0.3765439748764041, -0.007824301719665833, 0.35101768970489466, 0.7172322988510128, 2.5810040712356566]
 default_range = [-8, 8]
 default_round_decimals = 5
 
@@ -167,13 +168,133 @@ def plot_error(args, pwl_function, piecewise_points,number_of_samples=100_000):
     y = selected_function(x)
     y_approx = pwl_function(x)
     absolute_error = np.abs(y - y_approx)
-    plt.plot(x, absolute_error, label="absolute error", linewidth=2, color='darkgray')
+    plt.plot(x, absolute_error, label="absolute error", linewidth=2)
     plt.title(f"Error of {args.F} function and its piecewise linear approximation")
     plt.xlabel("x")
     plt.ylabel("Absolute Error")
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+
+
+# Take the piecewise_points, beta, and pwl_variables and output the result in csv
+# args: the arguments from the command line
+# pwl_function_variables: the variables of the piecewise linear function
+# betas: the beta values
+# Save the name in a file whose name is {args.F}_pwl_function_variables.csv
+# With four rows of data: segment_points, a, b, and beta
+# Use pandas to write the csv file
+# pwl_function_variables: a list of lists of [a, b] for each segment
+def output_result_in_csv(args, piecewise_points, pwl_function_variables, betas):
+    # Create DataFrames for piecewise_points, pwl_function_variables, and betas
+    df_piecewise_points = pd.DataFrame({'segment_points': piecewise_points})
+
+    # Split pwl_function_variables into separate lists for a and b
+    a_values = [variables[0] for variables in pwl_function_variables]
+    b_values = [variables[1] for variables in pwl_function_variables]
+    df_pwl_function_variables = pd.DataFrame({'a': a_values, 'b': b_values})
+
+    # Create DataFrame for betas
+    df_betas = pd.DataFrame({'beta': betas})
+
+    # Concatenate the DataFrames horizontally
+    df = pd.concat([df_piecewise_points, df_pwl_function_variables, df_betas], axis=1)
+
+    # Create the output file name based on the value in args.F
+    output_file_name = f"{args.F}_pwl_function_variables.csv"
+
+    # Write the DataFrame to a CSV file
+    df.to_csv(output_file_name, index=False)
+
+# Take float value and output the fp16 binary representation of the float value
+def float_to_fp16_binary(float_value):
+    # Convert the 32-bit float to a 16-bit FP16 representation
+    fp16_value = np.float16(float_value)
+
+    # Convert the FP16 value to its binary representation
+    fp16_binary = bin(fp16_value.view(np.uint16))
+
+    # Pad the binary representation to 16 bits (FP16 size)
+    fp16_binary_padded = fp16_binary[2:].zfill(16)
+
+    return fp16_binary_padded
+
+# Take float value and output the fp16 hexadecimal representation of the float value
+def float_to_fp16_hexadecimal(float_value):
+    # Convert the 32-bit float to a 16-bit FP16 representation
+    fp16_value = np.float16(float_value)
+
+    # Convert the FP16 value to its binary representation
+    fp16_binary = bin(fp16_value.view(np.uint16))
+
+    # Pad the binary representation to 16 bits (FP16 size)
+    fp16_binary_padded = fp16_binary[2:].zfill(16)
+
+    # Convert the binary string to hexadecimal with '0x' prefix
+    fp16_hex = '0x' + hex(int(fp16_binary_padded, 2))[2:].upper()
+
+    return fp16_hex
+
+# Function for verifying the fp16 verilog implementation
+# Gives true fp16 value for the two points in each segment
+def fp16_verilog_check(selected_function, piecewise_points, number_of_samples, is_sigmoid):
+    #Test with fp16, this is for verifying the fp16 implementation
+    # select two points for each segment and calculate true value and pwl function value all of them in fp16
+    # convert fp16 to hexadecimals and show the results
+    # get pwl_function
+    pwl_function = combined_function_generator(selected_function, piecewise_points, number_of_samples, is_sigmoid)
+
+    fp16_random_points = []
+    # randomly select two points for each segment
+    # select seed for reproducibility, 42
+    np.random.seed(42)
+    for i in range(len(piecewise_points)+1):
+        if i == 0:  # pick two points before the first segment
+            fp16_random_points.append(np.random.uniform(piecewise_points[0] - 2, piecewise_points[i], 2))
+        elif i == len(piecewise_points): # pick two points after the last segment
+            fp16_random_points.append(np.random.uniform(piecewise_points[i-1], piecewise_points[i-1] + 2, 2))
+        else: # pick two points in each segment
+            fp16_random_points.append(np.random.uniform(piecewise_points[i-1], piecewise_points[i], 2))
+    # turn the points into fp16
+    fp16_random_points = np.array(fp16_random_points, dtype=np.float16)
+    # calculate the true value and pwl function value
+    true_values = selected_function(fp16_random_points)
+    pwl_function_values = pwl_function(fp16_random_points)
+    # convert output values to fp16
+    fp16_true_values = np.array(true_values, dtype=np.float16)
+    fp16_pwl_function_values = np.array(pwl_function_values, dtype=np.float16)
+    fp16_binary_vec_func = np.vectorize(float_to_fp16_binary)
+    fp16_hexadecimal_vec_func = np.vectorize(float_to_fp16_hexadecimal)
+    # convert the points to binary_representation
+    fp16_true_values_binary = fp16_binary_vec_func(fp16_true_values)
+    fp16_pwl_function_values_binary = fp16_binary_vec_func(fp16_pwl_function_values)
+    fp16_random_points_binary = fp16_binary_vec_func(fp16_random_points)
+    # convert the points to hexadecimal_representation
+    fp16_true_values_hexadecimal = fp16_hexadecimal_vec_func(fp16_true_values)
+    fp16_pwl_function_values_hexadecimal = fp16_hexadecimal_vec_func(fp16_pwl_function_values)
+    fp16_random_points_hexadecimal = fp16_hexadecimal_vec_func(fp16_random_points)
+    # print the results for each segment
+    for i in range(len(piecewise_points)+1):
+        print(f"Segment Number {i}:")
+        if i == 0:
+            print(f'\tSegment Range: (-inf, {piecewise_points[i]})')
+        elif i == len(piecewise_points):
+            print(f'\tSegment Range: ({piecewise_points[i-1]}, inf)')
+        else:
+            print(f'\tSegment Range: ({piecewise_points[i-1]}, {piecewise_points[i]})')
+        print('')
+        for j in range(2):
+            print(f"\tPoint Number {j}:")
+            print(f"\tInput point: {fp16_random_points[i][j]}")
+            print(f"\tInput point in binary: {fp16_random_points_binary[i][j]}")
+            print(f"\tInput point in hexadecimal: {fp16_random_points_hexadecimal[i][j]}")
+            print(f"\tTrue value: {fp16_true_values[i][j]}")
+            print(f"\tTrue value in binary: {fp16_true_values_binary[i][j]}")
+            print(f"\tTrue value in hexadecimal: {fp16_true_values_hexadecimal[i][j]}")
+            print(f"\tpwl_function value: {fp16_pwl_function_values[i][j]}")
+            print(f"\tpwl_function value in binary: {fp16_pwl_function_values_binary[i][j]}")
+            print(f"\tpwl_function value in hexadecimal: {fp16_pwl_function_values_hexadecimal[i][j]}")
+            print("")
 
 if __name__ == '__main__':
     args = parse_arguments()
@@ -203,3 +324,6 @@ if __name__ == '__main__':
     print_function(args, piecewise_points, beta_variables, pwl_function_variables)
     visualize_function(args, piecewise_points, pwl_function_variables)
     plot_error(args, pwl_function, piecewise_points, number_of_samples)
+    output_result_in_csv(args, piecewise_points, pwl_function_variables, beta_variables)
+    fp16_verilog_check(selected_function, piecewise_points, number_of_samples, is_sigmoid)
+

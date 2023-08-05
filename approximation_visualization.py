@@ -139,9 +139,19 @@ for function, function_name, range_list, a_list, b_list in zip(functions, functi
         x_piecewise = np.linspace(range_list[i][0], range_list[i][1], 500)
         y_piecewise = [piecewise_linear_approx(j, [range_list[i]], [a_list[i]], [b_list[i]]) for j in x_piecewise]
 
-        # comma to unpack tuple
-        line, = ax.plot(x_piecewise, y_piecewise, label=f"{a_list[i]}x + {b_list[i]} for ({range_list[i][0]}, {range_list[i][1]}]", linestyle='dashed',
-                color=colors[i])
+        # avoid the duplication of signs by checking the sign of b_list[i] first
+        if b_list[i] < 0: # when b_list[i] is negative, there used to be + - sign side by side
+            # comma to unpack tuple
+            line, = ax.plot(x_piecewise, y_piecewise,
+                            label=f"{a_list[i]}x - {abs(b_list[i])} for ({range_list[i][0]}, {range_list[i][1]}]",
+                            linestyle='dashed',
+                            color=colors[i])
+        else: # b_list[i] >= 0, no need to change the sign as it is positive
+            # comma to unpack tuple
+            line, = ax.plot(x_piecewise, y_piecewise,
+                            label=f"{a_list[i]}x + {b_list[i]} for ({range_list[i][0]}, {range_list[i][1]})",
+                            linestyle='dashed',
+                            color=colors[i])
         lines.append(line)
         ax.plot(range_list[i][0], piecewise_linear_approx(range_list[i][0], [range_list[i]], [a_list[i]], [b_list[i]]),
                 marker_colors[foo], markersize=4)  # lower bound

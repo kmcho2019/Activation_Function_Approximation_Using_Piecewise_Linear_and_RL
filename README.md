@@ -23,7 +23,7 @@ pip install -r requirements.txt
 
 ## Usage
 
-- `RL_PPO_SB3.py`: Contains the RL training code and the environment setup. Modify the code to choose between sigmoid, SiLU, or GELU.
+- `RL_PPO_SB3.py`: Contains the RL training code and the environment setup. Modify the code to choose between sigmoid, SiLU, or GELU. After running code results are generated within the run_archive directory.
 - `least_sq_approximation.py`: Solves the matrix equation and generates the piecewise linear functions.
 - `points_to_function_converter.py`: Takes piecewise points to generate the variables that define the piecewise linear function.
 
@@ -68,10 +68,17 @@ Code cleanup and reimplementation in Jax for performance improvement are in prog
 ## Examples
 - Curvatures of GELU, SiLU, and sigmoid functions:
 
-![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/b82f8114-d8b3-4ba1-8dab-27a500b7456a)
+![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/de465649-2470-4321-a0e6-0e80b60df76d)
 
 - Example of GELU, SiLU, and sigmoid functions with their piecewise linear counterparts:
-- 
+  - GELU:
+    ![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/f61686ea-56c7-469d-85ac-69b2d4c7cd28)
+  - SiLU:
+    ![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/9958a439-e49d-4c67-b8f2-fe26da86a825)
+  - Sigmoid:
+    ![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/be04b28b-f59c-417c-9750-5fea4c0c043c)
+- ImageNet-1K Classification Accuracy using the approximation functions:
+  ![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/daf20e43-ca9e-40f7-9057-3839c58e801b)
 
 ## License
 

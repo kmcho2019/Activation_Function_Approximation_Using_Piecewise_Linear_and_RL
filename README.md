@@ -38,7 +38,7 @@ Contributions are welcome. Please read the contributing guidelines and code of c
 
 ## Implementation Details
 
-Takes inspiration from [Li et al 2022](#citation) for using curvature to select piecewise linear points. We extend this by using RL (used PPO algorithm) for automated selection. The system leverages curvature as an intermediate reward and combines average and maximum error for the final reward.
+Takes inspiration from [Li et al 2022](https://doi.org/10.3390/electronics11091365) for using curvature to select piecewise linear points. We extend this by using RL (used PPO algorithm) for automated selection. The system leverages curvature as an intermediate reward and combines average and maximum error for the final reward.
 
 Mathematical formulation:
 ![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/1ba53f1d-449c-478b-aaa8-52187889e19b)
@@ -68,17 +68,3 @@ TBD
 - **Email**: kmcho@postech.ac.kr
 - **Affiliation**: MS-PhD student at CAD & SoC Design Lab (CSDL), Postech under Professor Kang Seokhyeong
 
-## Citations
-``````bibtex
-@article{li2022,
-    title={FPGA implementation for the sigmoid with piecewise linear fitting method based on curvature analysis},
-    author={Z. Li, Y. Zhang, B. Sui, Z. Xing, and Q. Wang},
-    journal={Electronics},
-    volume={11},
-    number={9},
-    pages={1365},
-    year={2022},
-    publisher={MDPI},
-    doi={10.3390/electronics11091365}
-}
-``````

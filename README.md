@@ -1,5 +1,3 @@
-# Activation_Function_Approximation_Using_Piecewise_Linear_and_RL
-A system for using RL to determine segment points for piecewise linear approximation of activation functions like SiLU(swish). Able to generate piecewise linear approximation functions given range and segment points. Uses Stable Baselines3. For ISOCC2023.
 # Activation Function Approximation Using Piecewise Linear and RL
 
 ## Description
@@ -40,20 +38,17 @@ Contributions are welcome. Please read the contributing guidelines and code of c
 
 ## Implementation Details
 
-Takes inspiration from [Li et al 2022](#citation) for using curvature to select piecewise linear points. We extend this by using RL for automated selection. The system leverages curvature as an intermediate reward and combines average and maximum error for the final reward.
+Takes inspiration from [Li et al 2022](#citation) for using curvature to select piecewise linear points. We extend this by using RL (used PPO algorithm) for automated selection. The system leverages curvature as an intermediate reward and combines average and maximum error for the final reward.
 
 Mathematical formulation:
-p\left(x\right)=A,&x<b1β1+β2x-b1,b1<x≤b2β1+β2x-b1+β3x-b2,b2<x≤b3⋮β1+β2x-b1+β3x-b2+⋯+βmx-bm-1,bm-1<x≤bmB,&x>bm(1)
+![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/1ba53f1d-449c-478b-aaa8-52187889e19b)
+
 Where A and B are left and right asymptotes respectively (e.g., for sigmoid A = 0, B = 1, and for SiLU and GELU A = 0, B = x). Given the range and segment points, the least square method is used to find the optimal beta values (\beta_1,\ \beta_2,\ \ldots\ \ ,\ \beta_m)\ that minimizes the error, implemented using the scipy.linalg.lstsq function.
 
-{Reward}_{final}=\frac{1}{\left(0.2\ast E_{mean}+0.8\ast E_{max}\right)}\ (2)
-{Reward}_{intermediate}=\kappa=\frac{|y^{\prime\prime}|}{{(1+{y^\prime}^2)}^{3/2}}\ (3)
-\[
-\text{Final Reward} = \frac{1}{(0.2 \times E_{\text{mean}} + 0.8 \times E_{\text{max}})}
-\]
-\[
-\text{Intermediate Reward} = \kappa = \frac{|y''|}{(1 + {y'}^2)^{3/2}}
-\]
+![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/1f0a144b-5549-4c32-954d-094c30579756)
+
+![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/ec02bba7-8c42-4130-83df-1ac6157b7c77)
+
 
 ## Future Work
 

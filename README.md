@@ -43,7 +43,7 @@ Takes inspiration from [Li et al 2022](#citation) for using curvature to select 
 Mathematical formulation:
 ![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/1ba53f1d-449c-478b-aaa8-52187889e19b)
 
-Where A and B are left and right asymptotes respectively (e.g., for sigmoid A = 0, B = 1, and for SiLU and GELU A = 0, B = x). Given the range and segment points, the least square method is used to find the optimal beta values (\beta_1,\ \beta_2,\ \ldots\ \ ,\ \beta_m)\ that minimizes the error, implemented using the scipy.linalg.lstsq function.
+Where A and B are left and right asymptotes respectively (e.g., for sigmoid A = 0, B = 1, and for SiLU and GELU A = 0, B = x). Given the range and segment points, the least square method is used to find the optimal beta values (&beta;<sub>1</sub>, &beta;<sub>2</sub>, ..., &beta;<sub>m</sub>) that minimizes the error, implemented using the scipy.linalg.lstsq function.
 
 ![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/1f0a144b-5549-4c32-954d-094c30579756)
 

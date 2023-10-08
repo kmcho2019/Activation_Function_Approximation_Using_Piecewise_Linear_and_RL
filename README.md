@@ -41,13 +41,24 @@ Contributions are welcome. Please read the contributing guidelines and code of c
 Takes inspiration from [Li et al 2022](https://doi.org/10.3390/electronics11091365) for using curvature to select piecewise linear points. We extend this by using RL (used PPO algorithm) for automated selection. The system leverages curvature as an intermediate reward and combines average and maximum error for the final reward.
 
 Mathematical formulation:
+The piecewise linear function is created given an input range, [b<sub>1</sub>, b<sub>m</sub>], and segment points (b<sub>2</sub>, ..., b<sub>m-1</sub>) using the least square method from [Li et al 2022](https://doi.org/10.3390/electronics11091365).
+Range is set to [-8, 8] by default for all functions but can be modified if needed.
+
 ![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/1ba53f1d-449c-478b-aaa8-52187889e19b)
 
 Where A and B are left and right asymptotes respectively (e.g., for sigmoid A = 0, B = 1, and for SiLU and GELU A = 0, B = x). Given the range and segment points, the least square method is used to find the optimal beta values (&beta;<sub>1</sub>, &beta;<sub>2</sub>, ..., &beta;<sub>m</sub>) that minimizes the error, implemented using the scipy.linalg.lstsq function.
 
-![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/1f0a144b-5549-4c32-954d-094c30579756)
+![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/1b9925ae-2bfc-43c0-b7fc-6f3cfd85ed01)
 
-![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/ec02bba7-8c42-4130-83df-1ac6157b7c77)
+The value x_i is sampled over given range [b<sub>1</sub>, b<sub>m</sub>] an over interval 0.001. So, for interval of [-8, 8] we have a total of 16001 points being sampled (as the range is inclusive). And value y_i is the output of a given function (sigmoid, SiLU, GELU, et cetera) when x_i is the input. The above matrix can be formulated into a least square problem as follows.
+
+![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/3d75a5df-0614-412a-be2d-501fe84f50c0)
+
+The optimum <i>&beta;<sup>*</sup></i> that minimizes the error (<i>Y - A&beta;<sup>*</sup></i>) can be found using the least square method. In this implementation, it was done using the scipy.linalg.lstsq function.
+
+![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/2fcc1e55-cafa-44e6-8e01-825450e13e34)
+
+![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/ae59e192-a71f-400e-bdf4-c7b3b99334a9)
 
 
 ## Future Work
@@ -55,8 +66,12 @@ Where A and B are left and right asymptotes respectively (e.g., for sigmoid A = 
 Code cleanup and reimplementation in Jax for performance improvement are in progress.
 
 ## Examples
+- Curvatures of GELU, SiLU, and sigmoid functions:
 
-- Example of GELU, SiLU, and sigmoid functions with their piecewise linear counterparts (insert visualizations here).
+![image](https://github.com/kmcho2019/Activation_Function_Approximation_Using_Piecewise_Linear_and_RL/assets/91612340/b82f8114-d8b3-4ba1-8dab-27a500b7456a)
+
+- Example of GELU, SiLU, and sigmoid functions with their piecewise linear counterparts:
+- 
 
 ## License
 
